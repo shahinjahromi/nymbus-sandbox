@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { parse } from "yaml";
 import { validateAccessToken } from "../auth/oauth.js";
 import { checkApiRateLimit } from "../services/security-rate-limit.js";
+import { enforceEnvironmentScope } from "../auth/middleware.js";
 
 type RouteMethod = "get" | "post" | "put" | "patch" | "delete" | "options" | "head";
 
@@ -112,6 +113,10 @@ function ensureFallbackAuth(req: Request, res: Response, next: NextFunction): vo
       code: "INVALID_OR_EXPIRED_TOKEN",
       message: "Access token is invalid or expired. Use the token endpoint to obtain a new one.",
     });
+    return;
+  }
+
+  if (!enforceEnvironmentScope(req, res)) {
     return;
   }
 

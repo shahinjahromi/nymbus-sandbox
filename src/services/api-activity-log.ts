@@ -32,6 +32,7 @@ function pushActivity(tenantId: string, entry: ApiActivityEntry): void {
 
 export function listApiActivityForTenant(params: {
   tenantId: string;
+  environment?: "sandbox";
   method?: string;
   pathContains?: string;
   statusCode?: number;
@@ -41,6 +42,9 @@ export function listApiActivityForTenant(params: {
 
   return all
     .filter((entry) => {
+      if (params.environment && entry.environment !== params.environment) {
+        return false;
+      }
       if (params.method && entry.method !== params.method.toUpperCase()) {
         return false;
       }

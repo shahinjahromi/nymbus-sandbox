@@ -1,4 +1,5 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
+import { enforceEnvironmentScope } from "../auth/middleware.js";
 import {
   authenticatePortalUser,
   confirmResetOtp,
@@ -15,6 +16,11 @@ import {
 } from "../services/developer-registry.js";
 import { listApiActivityForTenant } from "../services/api-activity-log.js";
 import { listTenantAuditEntries, writeAuditEntry } from "../services/audit-log.js";
+import {
+  getActiveContractMetadata,
+  getContractChangeLog,
+  getContractDeprecations,
+} from "../services/openapi-contract.js";
 import {
   accrueDailyInterest,
   createTenantAccount,
@@ -48,6 +54,10 @@ function requirePortalSession(req: Request, res: Response, next: NextFunction): 
   const { valid, email, tenantId } = validatePortalSession(token);
   if (!valid || !email || !tenantId) {
     res.status(401).json({ code: "INVALID_PORTAL_SESSION", message: "Portal session expired" });
+    return;
+  }
+
+  if (!enforceEnvironmentScope(req, res)) {
     return;
   }
 
@@ -781,9 +791,20 @@ portalRouter.post("/portal-api/interest/accrue-daily", requirePortalSession, (re
 });
 
 portalRouter.get("/portal-api/api-activity", requirePortalSession, (req: Request, res: Response) => {
-  const { method, path_contains: pathContains, status, limit } = req.query;
+  const { method, path_contains: pathContains, status, limit, environment } = req.query;
+  const normalizedEnvironment =
+    typeof environment === "string" && environment.trim().length > 0
+      ? environment.trim().toLowerCase()
+      : "sandbox";
+
+  if (normalizedEnvironment !== "sandbox") {
+    res.json({ data: [], environment: "sandbox" });
+    return;
+  }
+
   const entries = listApiActivityForTenant({
     tenantId: req.portalTenantId!,
+    environment: "sandbox",
     method: typeof method === "string" ? method : undefined,
     pathContains: typeof pathContains === "string" ? pathContains : undefined,
     statusCode:
@@ -793,6 +814,22 @@ portalRouter.get("/portal-api/api-activity", requirePortalSession, (req: Request
 
   res.json({ data: entries, environment: "sandbox" });
 });
+
+portalRouter.get("/portal-api/contract/metadata", requirePortalSession, (_req: Request, res: Response) => {
+  res.json(getActiveContractMetadata());
+});
+
+portalRouter.get("/portal-api/contract/changelog", requirePortalSession, (_req: Request, res: Response) => {
+  res.json(getContractChangeLog());
+});
+
+portalRouter.get(
+  "/portal-api/contract/deprecations",
+  requirePortalSession,
+  (_req: Request, res: Response) => {
+    res.json(getContractDeprecations());
+  }
+);
 
 portalRouter.get("/portal-api/audit", requirePortalSession, (req: Request, res: Response) => {
   const limit =
@@ -900,6 +937,13 @@ portalRouter.get("/portal", (_req: Request, res: Response) => {
     <h2>Observability</h2>
     <button onclick="loadApiActivity()">Load API Activity</button>
     <button onclick="loadAudit()">Load Audit Trail</button>
+  </section>
+
+  <section>
+    <h2>Contract visibility</h2>
+    <button onclick="loadContractMetadata()">Load Contract Metadata</button>
+    <button onclick="loadContractChangeLog()">Load Contract Change Log</button>
+    <button onclick="loadContractDeprecations()">Load Deprecations</button>
   </section>
 
   <pre id="output">Ready.</pre>
@@ -1064,6 +1108,18 @@ portalRouter.get("/portal", (_req: Request, res: Response) => {
 
     async function loadAudit() {
       setOutput(await call('/audit'));
+    }
+
+    async function loadContractMetadata() {
+      setOutput(await call('/contract/metadata'));
+    }
+
+    async function loadContractChangeLog() {
+      setOutput(await call('/contract/changelog'));
+    }
+
+    async function loadContractDeprecations() {
+      setOutput(await call('/contract/deprecations'));
     }
   </script>
 </body>

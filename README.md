@@ -94,6 +94,8 @@ curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/jso
   - Simulations: `POST /portal-api/simulations/ach-incoming`, `POST /portal-api/simulations/ach-outgoing`, `POST /portal-api/simulations/wire-incoming`, `POST /portal-api/simulations/card`
   - Interest/yield: `GET/POST /portal-api/accounts/:id/yield-config`, `POST /portal-api/interest/accrue-daily`
   - Observability: `GET /portal-api/api-activity`, `GET /portal-api/audit`
+  - Contract visibility: `GET /portal-api/contract/metadata`, `GET /portal-api/contract/changelog`, `GET /portal-api/contract/deprecations`
+- **Environment scope header:** authenticated API and portal session calls accept optional `x-environment` (or `x-sandbox-environment`); values other than `sandbox` are rejected with `401 INVALID_ENVIRONMENT_SCOPE`.
 - **Root:** `GET /` returns a short summary with token URL and endpoint list.
 - **Health:** `GET /health` for liveness.
 

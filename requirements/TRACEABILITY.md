@@ -300,4 +300,27 @@ Format per entry:
 
 ---
 
+### 16. REQ-F-011/012 runtime tranche: contract visibility APIs and environment scope enforcement
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-011, REQ-F-012
+- **Requirement title:** Portal contract metadata/change visibility and explicit environment-scoped credential/session enforcement
+- **Files changed:**
+  - `src/services/openapi-contract.ts` (new; active contract metadata, changelog, deprecation extraction from managed OpenAPI artifacts)
+  - `src/routes/portal.ts` (added `GET /portal-api/contract/metadata`, `GET /portal-api/contract/changelog`, `GET /portal-api/contract/deprecations`, contract visibility UI controls, and environment-filter behavior for API activity view)
+  - `src/auth/middleware.ts` (added shared environment scope enforcement logic for authenticated calls)
+  - `src/routes/openapi-fallback.ts` (applies environment scope enforcement for fallback contract routes)
+  - `src/services/api-activity-log.ts` (added environment filter support)
+  - `tests/req-f-011-contract-version-metadata.test.ts` (new)
+  - `tests/req-f-011-contract-change-log.test.ts` (new)
+  - `tests/req-f-011-deprecation-highlights.test.ts` (new)
+  - `tests/req-f-012-environment-labeling.test.ts` (new)
+  - `tests/req-f-012-credential-environment-scope.test.ts` (new)
+  - `tests/req-f-012-environment-partitioned-logs.test.ts` (new)
+  - `README.md` (documented contract visibility and environment-scope header behavior)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Implemented runtime portal endpoints that surface managed OpenAPI contract metadata, operation-level change summaries, and deprecation highlights, and enforced explicit sandbox environment scope on authenticated API/session flows. Added runtime tests for contract visibility and environment separation semantics.
+
+---
+
 *(Add new entries at the bottom when implementing further requirements.)*
