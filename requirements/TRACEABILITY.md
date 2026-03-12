@@ -337,4 +337,54 @@ Format per entry:
 
 ---
 
+### 18. REQ-F-005 contract parity tranche: prioritized customer/account/transaction specializations
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-005
+- **Requirement title:** Full Core contract parity (incremental slice: replace highest-impact fallback paths with domain-specific handlers)
+- **Files changed:**
+  - `src/services/tenant-store.ts` (added customer update workflow and customer-scoped transfer listing helpers)
+  - `src/routes/customers.ts` (added specialized handlers for `POST /customers`, `PATCH /customers/:id`, nested customer-account operations, and customer transfer operations)
+  - `src/routes/accounts.ts` (added specialized handlers for `POST /accounts/search`, account-scoped transaction listing, and account-scoped transaction lookup)
+  - `src/routes/transactions.ts` (added specialized transaction initiation handlers for `POST /transactions`, `POST /transactions/transfer`, `POST /transactions/externalTransfer`, and `POST /transactions/createIncomingWire`)
+  - `tests/req-f-005-priority-implementations.test.ts` (new; validates prioritized endpoints execute concrete tenant-store behavior)
+  - `README.md` (documented newly specialized high-impact routes)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Implemented the top contract-parity priority endpoints (based on fallback-gap concentration) in specialized routers backed by tenant-store state transitions. This tranche reduced fallback-only OpenAPI operations from 134 to 87 in the local gap report while preserving full-suite stability.
+
+---
+
+### 19. REQ-F-005 contract parity tranche: accounts-ext, loan payments, and customer UDF/document workflows
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-005
+- **Requirement title:** Full Core contract parity (incremental slice: replace next high-impact fallback families with specialized runtime handlers)
+- **Files changed:**
+  - `src/services/tenant-store.ts` (added tenant-scoped domain models and state helpers for loan payments, customer/account user-defined fields, and customer/account document lifecycle)
+  - `src/routes/accounts.ts` (added `GET /accounts-ext`, `GET/PATCH /accounts/:accountId/loanPayments`, and `DELETE /accounts/:accountId/loanPayments/:paymentId` specialized handlers)
+  - `src/routes/customers.ts` (added customer/account user-defined field and document workflow handlers, including idempotent ID-based operations)
+  - `tests/req-f-005-priority-tranche-2-implementations.test.ts` (new; validates tranche 2 endpoint behavior)
+  - `README.md` (expanded specialized route documentation)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Implemented the next prioritized contract parity tranche centered on account extension views, loan payment operations, and customer/account UDF-document lifecycle endpoints. Maintained OpenAPI routability and reduced fallback-only operations from 87 to 62 in the local gap report.
+
+---
+
+### 20. REQ-F-005 contract parity tranche: customer transfer mutations, debit-card actions, and wire lifecycle endpoints
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-005
+- **Requirement title:** Full Core contract parity (incremental slice: replace remaining high-frequency customer/transaction fallback operations)
+- **Files changed:**
+  - `src/services/tenant-store.ts` (added account/transfer mutation helpers used by specialized lifecycle routes)
+  - `src/routes/accounts.ts` (added `GET /accounts/:accountId/transactions/:transactionId/image` and `PATCH /accounts/:accountId/updateRewardProgramLevel`)
+  - `src/routes/customers.ts` (added `GET /customers-ext`, `POST /customers/search`, account lifecycle mutations, transfer patch/delete, beneficiary linking, collateral/upload handlers, and debit-card activation/status/reference endpoints)
+  - `src/routes/transactions.ts` (added `POST /transactions/createOutgoingWire`, `POST /transactions/updateIncomingWireStatus`, `POST /transactions/updateOutgoingWireStatus`, `POST /transactions/commitWireTransaction`, `POST /transactions/disbursement`, and `POST /onboarding/loanOnboardingFunding`)
+  - `tests/req-f-005-priority-tranche-3-implementations.test.ts` (new; validates tranche 3 specialized route behavior)
+  - `README.md` (expanded specialized core route list)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Implemented the next parity tranche for customer transfer mutation and debit-card control operations plus wire/disbursement lifecycle endpoints. OpenAPI routability remained green and fallback-only operations dropped from 62 to 30 in the local gap report.
+
+---
+
 *(Add new entries at the bottom when implementing further requirements.)*

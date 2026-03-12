@@ -7,6 +7,37 @@ import {
 } from "./mock-data.js";
 import type { Account, Customer, Transaction, Transfer } from "../types/index.js";
 
+type JsonObject = Record<string, unknown>;
+
+export interface LoanPaymentRecord {
+  id: string;
+  accountId: string;
+  amount: number;
+  frequency: string;
+  status: string;
+  nextPaymentDate?: string;
+  updatedAt: string;
+}
+
+export interface UserDefinedFieldRecord {
+  id: string;
+  key: string;
+  value: string;
+  category?: string;
+  updatedAt: string;
+  metadata?: JsonObject;
+}
+
+export interface DocumentRecord {
+  id: string;
+  title: string;
+  status: string;
+  type?: string;
+  createdAt: string;
+  updatedAt: string;
+  payload: JsonObject;
+}
+
 export interface YieldConfig {
   accountId: string;
   apy: number;
@@ -22,6 +53,11 @@ interface TenantDataset {
   transactions: Transaction[];
   transfers: Transfer[];
   yieldConfigs: Map<string, YieldConfig>;
+  loanPaymentsByAccount: Map<string, LoanPaymentRecord[]>;
+  customerUserDefinedFields: Map<string, UserDefinedFieldRecord[]>;
+  accountUserDefinedFields: Map<string, UserDefinedFieldRecord[]>;
+  customerDocuments: Map<string, DocumentRecord[]>;
+  accountDocuments: Map<string, DocumentRecord[]>;
 }
 
 const datasets = new Map<string, TenantDataset>();
@@ -53,7 +89,220 @@ function cloneDataset(): TenantDataset {
     transactions: structuredClone(mockTransactions),
     transfers: structuredClone(mockTransfers),
     yieldConfigs: new Map(),
+    loanPaymentsByAccount: new Map(),
+    customerUserDefinedFields: new Map(),
+    accountUserDefinedFields: new Map(),
+    customerDocuments: new Map(),
+    accountDocuments: new Map(),
   };
+}
+
+function scopedAccountKey(customerId: string, accountId: string): string {
+  return `${customerId}:${accountId}`;
+}
+
+function toObject(value: unknown): JsonObject | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value as JsonObject;
+}
+
+function toStringValue(value: unknown, fallback: string): string {
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return fallback;
+}
+
+function toNumberValue(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return fallback;
+}
+
+function getLoanPaymentCollection(dataset: TenantDataset, accountId: string): LoanPaymentRecord[] {
+  let records = dataset.loanPaymentsByAccount.get(accountId);
+  if (!records) {
+    records = [
+      {
+        id: `lp_${uuidv4().slice(0, 8)}`,
+        accountId,
+        amount: 100,
+        frequency: "monthly",
+        status: "active",
+        nextPaymentDate: toDateOnly(nowIso()),
+        updatedAt: nowIso(),
+      },
+    ];
+    dataset.loanPaymentsByAccount.set(accountId, records);
+  }
+
+  return records;
+}
+
+function normalizeUserDefinedField(input: JsonObject, fallbackId?: string): UserDefinedFieldRecord {
+  const now = nowIso();
+
+  const id = toStringValue(input.id ?? input.fieldId ?? input.field_id, fallbackId ?? `udf_${uuidv4().slice(0, 8)}`);
+  const key = toStringValue(input.key ?? input.name, "field");
+  const value = toStringValue(input.value, "");
+  const categoryValue = input.category ?? input.scope;
+  const category = typeof categoryValue === "string" && categoryValue.trim().length > 0 ? categoryValue : undefined;
+
+  return {
+    id,
+    key,
+    value,
+    category,
+    updatedAt: now,
+    metadata: toObject(input.metadata),
+  };
+}
+
+function getUserDefinedFieldCollection(
+  map: Map<string, UserDefinedFieldRecord[]>,
+  scopedKey: string
+): UserDefinedFieldRecord[] {
+  let records = map.get(scopedKey);
+  if (!records) {
+    records = [];
+    map.set(scopedKey, records);
+  }
+
+  return records;
+}
+
+function upsertUserDefinedFields(
+  map: Map<string, UserDefinedFieldRecord[]>,
+  scopedKey: string,
+  fields: JsonObject[]
+): UserDefinedFieldRecord[] {
+  const collection = getUserDefinedFieldCollection(map, scopedKey);
+
+  for (const field of fields) {
+    const normalized = normalizeUserDefinedField(field);
+    const index = collection.findIndex((item) => item.id === normalized.id);
+    if (index >= 0) {
+      collection[index] = {
+        ...collection[index],
+        ...normalized,
+      };
+      continue;
+    }
+
+    collection.push(normalized);
+  }
+
+  return [...collection];
+}
+
+function getDocumentCollection(
+  map: Map<string, DocumentRecord[]>,
+  scopedKey: string
+): DocumentRecord[] {
+  let collection = map.get(scopedKey);
+  if (!collection) {
+    collection = [];
+    map.set(scopedKey, collection);
+  }
+
+  return collection;
+}
+
+function normalizeDocument(input: JsonObject, fallbackId?: string): DocumentRecord {
+  const now = nowIso();
+  const id = toStringValue(
+    input.documentRootId ?? input.document_root_id ?? input.id,
+    fallbackId ?? `doc_${uuidv4().slice(0, 8)}`
+  );
+
+  return {
+    id,
+    title: toStringValue(input.title ?? input.name, `Document ${id}`),
+    status: toStringValue(input.status, "active"),
+    type: typeof input.type === "string" ? input.type : undefined,
+    createdAt: now,
+    updatedAt: now,
+    payload: {
+      ...input,
+      documentRootId: id,
+    },
+  };
+}
+
+function createDocument(
+  map: Map<string, DocumentRecord[]>,
+  scopedKey: string,
+  input: JsonObject
+): DocumentRecord {
+  const collection = getDocumentCollection(map, scopedKey);
+  const normalized = normalizeDocument(input);
+  const existingIndex = collection.findIndex((item) => item.id === normalized.id);
+
+  if (existingIndex >= 0) {
+    const existing = collection[existingIndex];
+    const updated: DocumentRecord = {
+      ...existing,
+      ...normalized,
+      createdAt: existing.createdAt,
+      updatedAt: nowIso(),
+      payload: {
+        ...existing.payload,
+        ...normalized.payload,
+      },
+    };
+    collection[existingIndex] = updated;
+    return updated;
+  }
+
+  collection.push(normalized);
+  return normalized;
+}
+
+function updateDocument(
+  map: Map<string, DocumentRecord[]>,
+  scopedKey: string,
+  documentId: string,
+  patch: JsonObject
+): DocumentRecord | undefined {
+  const collection = getDocumentCollection(map, scopedKey);
+  const index = collection.findIndex((item) => item.id === documentId);
+  if (index < 0) {
+    return undefined;
+  }
+
+  const current = collection[index];
+  const updated: DocumentRecord = {
+    ...current,
+    title: toStringValue(patch.title ?? current.title, current.title),
+    status: toStringValue(patch.status ?? current.status, current.status),
+    type: typeof patch.type === "string" ? patch.type : current.type,
+    updatedAt: nowIso(),
+    payload: {
+      ...current.payload,
+      ...patch,
+      documentRootId: documentId,
+    },
+  };
+
+  collection[index] = updated;
+  return updated;
 }
 
 function ensureTenantDataset(tenantId: string): TenantDataset {
@@ -118,6 +367,57 @@ export function createTenantCustomer(params: {
 export function getTenantCustomerById(tenantId: string, customerId: string): Customer | undefined {
   const dataset = ensureTenantDataset(tenantId);
   return dataset.customers.find((customer) => customer.id === customerId);
+}
+
+export function updateTenantCustomer(params: {
+  tenantId: string;
+  customerId: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  externalId?: string;
+  status?: Customer["status"];
+  kycStatus?: Customer["kycStatus"];
+}): { customer?: Customer; error?: "NOT_FOUND" | "EMAIL_ALREADY_EXISTS" } {
+  const dataset = ensureTenantDataset(params.tenantId);
+  const customer = dataset.customers.find((item) => item.id === params.customerId);
+  if (!customer) {
+    return { error: "NOT_FOUND" };
+  }
+
+  if (params.email) {
+    const normalizedEmail = params.email.trim().toLowerCase();
+    const duplicate = dataset.customers.some(
+      (item) =>
+        item.id !== params.customerId && item.email.trim().toLowerCase() === normalizedEmail
+    );
+    if (duplicate) {
+      return { error: "EMAIL_ALREADY_EXISTS" };
+    }
+    customer.email = normalizedEmail;
+  }
+
+  if (params.firstName) {
+    customer.firstName = params.firstName;
+  }
+
+  if (params.lastName) {
+    customer.lastName = params.lastName;
+  }
+
+  if (params.externalId !== undefined) {
+    customer.externalId = params.externalId;
+  }
+
+  if (params.status) {
+    customer.status = params.status;
+  }
+
+  if (params.kycStatus) {
+    customer.kycStatus = params.kycStatus;
+  }
+
+  return { customer };
 }
 
 export function createTenantAccount(params: {
@@ -191,6 +491,321 @@ export function listTenantTransfersByAccountId(tenantId: string, accountId: stri
 export function getTenantTransferById(tenantId: string, transferId: string): Transfer | undefined {
   const dataset = ensureTenantDataset(tenantId);
   return dataset.transfers.find((transfer) => transfer.id === transferId);
+}
+
+export function updateTenantAccount(params: {
+  tenantId: string;
+  accountId: string;
+  status?: Account["status"];
+  type?: Account["type"];
+  metadata?: Record<string, unknown>;
+}): Account | undefined {
+  const dataset = ensureTenantDataset(params.tenantId);
+  const account = dataset.accounts.find((item) => item.id === params.accountId);
+  if (!account) {
+    return undefined;
+  }
+
+  if (params.status) {
+    account.status = params.status;
+  }
+
+  if (params.type) {
+    account.type = params.type;
+  }
+
+  if (params.metadata) {
+    account.metadata = {
+      ...(account.metadata ?? {}),
+      ...params.metadata,
+    };
+  }
+
+  return account;
+}
+
+export function updateTenantTransfer(params: {
+  tenantId: string;
+  transferId: string;
+  status?: Transfer["status"];
+  description?: string;
+}): Transfer | undefined {
+  const dataset = ensureTenantDataset(params.tenantId);
+  const transfer = dataset.transfers.find((item) => item.id === params.transferId);
+  if (!transfer) {
+    return undefined;
+  }
+
+  if (params.status) {
+    transfer.status = params.status;
+    if (params.status === "completed") {
+      transfer.completedAt = nowIso();
+    }
+  }
+
+  if (params.description !== undefined) {
+    transfer.description = params.description;
+  }
+
+  return transfer;
+}
+
+export function deleteTenantTransfer(tenantId: string, transferId: string): boolean {
+  const dataset = ensureTenantDataset(tenantId);
+  const index = dataset.transfers.findIndex((item) => item.id === transferId);
+  if (index < 0) {
+    return false;
+  }
+
+  dataset.transfers.splice(index, 1);
+  return true;
+}
+
+export function listTenantTransfersByCustomerId(tenantId: string, customerId: string): Transfer[] {
+  const dataset = ensureTenantDataset(tenantId);
+  const customerAccountIds = new Set(
+    dataset.accounts
+      .filter((account) => account.customerId === customerId)
+      .map((account) => account.id)
+  );
+
+  return dataset.transfers.filter(
+    (transfer) =>
+      customerAccountIds.has(transfer.fromAccountId) ||
+      (transfer.toAccountId ? customerAccountIds.has(transfer.toAccountId) : false)
+  );
+}
+
+export function listTenantLoanPayments(tenantId: string, accountId: string): LoanPaymentRecord[] {
+  const dataset = ensureTenantDataset(tenantId);
+  return [...getLoanPaymentCollection(dataset, accountId)];
+}
+
+export function upsertTenantLoanPayment(
+  tenantId: string,
+  accountId: string,
+  input: JsonObject
+): LoanPaymentRecord {
+  const dataset = ensureTenantDataset(tenantId);
+  const collection = getLoanPaymentCollection(dataset, accountId);
+  const id = toStringValue(input.id ?? input.paymentId ?? input.payment_id, `lp_${uuidv4().slice(0, 8)}`);
+  const index = collection.findIndex((item) => item.id === id);
+
+  const current =
+    index >= 0
+      ? collection[index]
+      : {
+          id,
+          accountId,
+          amount: 0,
+          frequency: "monthly",
+          status: "active",
+          updatedAt: nowIso(),
+        };
+
+  const next: LoanPaymentRecord = {
+    ...current,
+    id,
+    accountId,
+    amount: roundMoney(Math.max(0, toNumberValue(input.amount, current.amount))),
+    frequency: toStringValue(input.frequency, current.frequency),
+    status: toStringValue(input.status, current.status),
+    nextPaymentDate:
+      typeof input.nextPaymentDate === "string"
+        ? toDateOnly(input.nextPaymentDate)
+        : typeof input.next_payment_date === "string"
+          ? toDateOnly(input.next_payment_date)
+          : current.nextPaymentDate,
+    updatedAt: nowIso(),
+  };
+
+  if (index >= 0) {
+    collection[index] = next;
+  } else {
+    collection.push(next);
+  }
+
+  return next;
+}
+
+export function deleteTenantLoanPayment(
+  tenantId: string,
+  accountId: string,
+  paymentId: string
+): boolean {
+  const dataset = ensureTenantDataset(tenantId);
+  const collection = getLoanPaymentCollection(dataset, accountId);
+  const index = collection.findIndex((item) => item.id === paymentId);
+  if (index < 0) {
+    return false;
+  }
+
+  collection.splice(index, 1);
+  return true;
+}
+
+export function listTenantCustomerUserDefinedFields(
+  tenantId: string,
+  customerId: string
+): UserDefinedFieldRecord[] {
+  const dataset = ensureTenantDataset(tenantId);
+  return [...getUserDefinedFieldCollection(dataset.customerUserDefinedFields, customerId)];
+}
+
+export function upsertTenantCustomerUserDefinedFields(
+  tenantId: string,
+  customerId: string,
+  fields: JsonObject[]
+): UserDefinedFieldRecord[] {
+  const dataset = ensureTenantDataset(tenantId);
+  return upsertUserDefinedFields(dataset.customerUserDefinedFields, customerId, fields);
+}
+
+export function listTenantAccountUserDefinedFields(
+  tenantId: string,
+  customerId: string,
+  accountId: string
+): UserDefinedFieldRecord[] {
+  const dataset = ensureTenantDataset(tenantId);
+  const key = scopedAccountKey(customerId, accountId);
+  return [...getUserDefinedFieldCollection(dataset.accountUserDefinedFields, key)];
+}
+
+export function upsertTenantAccountUserDefinedFields(
+  tenantId: string,
+  customerId: string,
+  accountId: string,
+  fields: JsonObject[]
+): UserDefinedFieldRecord[] {
+  const dataset = ensureTenantDataset(tenantId);
+  const key = scopedAccountKey(customerId, accountId);
+  return upsertUserDefinedFields(dataset.accountUserDefinedFields, key, fields);
+}
+
+export function deleteTenantAccountUserDefinedField(
+  tenantId: string,
+  customerId: string,
+  accountId: string,
+  fieldId: string
+): boolean {
+  const dataset = ensureTenantDataset(tenantId);
+  const key = scopedAccountKey(customerId, accountId);
+  const collection = getUserDefinedFieldCollection(dataset.accountUserDefinedFields, key);
+  const index = collection.findIndex((item) => item.id === fieldId);
+  if (index < 0) {
+    return false;
+  }
+
+  collection.splice(index, 1);
+  return true;
+}
+
+export function createTenantCustomerDocument(
+  tenantId: string,
+  customerId: string,
+  input: JsonObject
+): DocumentRecord {
+  const dataset = ensureTenantDataset(tenantId);
+  return createDocument(dataset.customerDocuments, customerId, input);
+}
+
+export function getTenantCustomerDocument(
+  tenantId: string,
+  customerId: string,
+  documentId: string
+): DocumentRecord | undefined {
+  const dataset = ensureTenantDataset(tenantId);
+  const collection = getDocumentCollection(dataset.customerDocuments, customerId);
+  return collection.find((item) => item.id === documentId);
+}
+
+export function updateTenantCustomerDocument(
+  tenantId: string,
+  customerId: string,
+  documentId: string,
+  patch: JsonObject
+): DocumentRecord | undefined {
+  const dataset = ensureTenantDataset(tenantId);
+  return updateDocument(dataset.customerDocuments, customerId, documentId, patch);
+}
+
+export function deleteTenantCustomerDocument(
+  tenantId: string,
+  customerId: string,
+  documentId: string
+): boolean {
+  const dataset = ensureTenantDataset(tenantId);
+  const collection = getDocumentCollection(dataset.customerDocuments, customerId);
+  const index = collection.findIndex((item) => item.id === documentId);
+  if (index < 0) {
+    return false;
+  }
+
+  collection.splice(index, 1);
+  return true;
+}
+
+export function createTenantAccountDocument(
+  tenantId: string,
+  customerId: string,
+  accountId: string,
+  input: JsonObject
+): DocumentRecord {
+  const dataset = ensureTenantDataset(tenantId);
+  const key = scopedAccountKey(customerId, accountId);
+  return createDocument(dataset.accountDocuments, key, input);
+}
+
+export function listTenantAccountDocuments(
+  tenantId: string,
+  customerId: string,
+  accountId: string
+): DocumentRecord[] {
+  const dataset = ensureTenantDataset(tenantId);
+  const key = scopedAccountKey(customerId, accountId);
+  return [...getDocumentCollection(dataset.accountDocuments, key)];
+}
+
+export function getTenantAccountDocument(
+  tenantId: string,
+  customerId: string,
+  accountId: string,
+  documentId: string
+): DocumentRecord | undefined {
+  const dataset = ensureTenantDataset(tenantId);
+  const key = scopedAccountKey(customerId, accountId);
+  const collection = getDocumentCollection(dataset.accountDocuments, key);
+  return collection.find((item) => item.id === documentId);
+}
+
+export function updateTenantAccountDocument(
+  tenantId: string,
+  customerId: string,
+  accountId: string,
+  documentId: string,
+  patch: JsonObject
+): DocumentRecord | undefined {
+  const dataset = ensureTenantDataset(tenantId);
+  const key = scopedAccountKey(customerId, accountId);
+  return updateDocument(dataset.accountDocuments, key, documentId, patch);
+}
+
+export function deleteTenantAccountDocument(
+  tenantId: string,
+  customerId: string,
+  accountId: string,
+  documentId: string
+): boolean {
+  const dataset = ensureTenantDataset(tenantId);
+  const key = scopedAccountKey(customerId, accountId);
+  const collection = getDocumentCollection(dataset.accountDocuments, key);
+  const index = collection.findIndex((item) => item.id === documentId);
+  if (index < 0) {
+    return false;
+  }
+
+  collection.splice(index, 1);
+  return true;
 }
 
 export function createTenantTransfer(params: {
