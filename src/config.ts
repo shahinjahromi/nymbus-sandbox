@@ -1,8 +1,11 @@
 import "dotenv/config";
 
+const nodeEnv = process.env.NODE_ENV ?? "development";
+const defaultTestDbSuffix = process.env.VITEST_POOL_ID ?? process.pid.toString();
+
 export const config = {
   port: parseInt(process.env.PORT ?? "3040", 10),
-  nodeEnv: process.env.NODE_ENV ?? "development",
+  nodeEnv,
   sandboxBaseUrl: process.env.SANDBOX_BASE_URL ?? "http://localhost:3040",
   oauth: {
     tokenTtlSeconds: parseInt(process.env.OAUTH_TOKEN_TTL_SECONDS ?? "3600", 10),
@@ -17,5 +20,16 @@ export const config = {
       process.env.SANDBOX_PORTAL_AUTH_REQUESTS_PER_MINUTE ?? "60",
       10
     ),
+  },
+  persistence: {
+    sqlitePath:
+      process.env.SANDBOX_SQLITE_PATH ??
+      (nodeEnv === "test"
+        ? `.data/nymbus-sandbox-test-${defaultTestDbSuffix}.sqlite`
+        : ".data/nymbus-sandbox.sqlite"),
+    resetOnBoot:
+      process.env.SANDBOX_SQLITE_RESET_ON_BOOT !== undefined
+        ? process.env.SANDBOX_SQLITE_RESET_ON_BOOT === "true"
+        : nodeEnv === "test",
   },
 } as const;

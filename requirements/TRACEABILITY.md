@@ -387,4 +387,28 @@ Format per entry:
 
 ---
 
+---
+
+### 21. REQ-F-005 / REQ-NF-004 durable persistence migration and escrow/statement/stop-payment/credit-card parity endpoints
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-005, REQ-NF-004
+- **Requirement title:** Durable SQLite-backed persistence for tenant and fallback state; additional financial core parity endpoints
+- **Files changed:**
+  - `package.json` (added `better-sqlite3` and `@types/better-sqlite3` dependencies)
+  - `src/config.ts` (added `persistence.sqlitePath` and `persistence.resetOnBoot` with test-worker-safe defaults)
+  - `src/services/durable-store.ts` (new; SQLite WAL-mode initialization, tenant and fallback dataset load/save operations)
+  - `src/services/tenant-store.ts` (added durable payload serialization/deserialization, `flushTenantStore()`, `resetTenantStoreRuntimeCacheForTests()`)
+  - `src/routes/openapi-fallback.ts` (added durable fallback state load/save and `flushFallbackRuntimeStore()`)
+  - `src/app.ts` (added response-finish middleware to flush tenant store and fallback runtime store each request)
+  - `src/routes/accounts.ts` (added escrow disbursement/projection, loan charge assessment, reserve/original LTV, remote deposit, statement list/detail, and account stop-check endpoints)
+  - `src/routes/customers.ts` (added customer-account stop-check and stop-ACH endpoints, customer credit-card creation)
+  - `tests/req-f-005-durable-persistence.test.ts` (new; validates data survives runtime cache reset via durable store)
+  - `.env.example` (documented persistence environment variables)
+  - `.gitignore` (added `.data/` for SQLite test artifacts)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Migrated tenant-store and fallback-state persistence from runtime-only in-memory caches to SQLite-backed durable storage with WAL journaling and request-end flush semantics. Added additional financial core parity endpoints for escrow operations, loan charge assessment, statement retrieval, stop-payment/stop-ACH controls, and credit-card creation. Full suite (39 files, 80 tests) passes green.
+
+---
+
 *(Add new entries at the bottom when implementing further requirements.)*

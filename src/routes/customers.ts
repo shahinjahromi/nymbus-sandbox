@@ -114,6 +114,39 @@ function getTenantDebitCards(tenantId: string, customerId: string): DebitCardRec
   return cards;
 }
 
+function getAccountMetadataCollection(
+  account: { metadata?: Record<string, unknown> },
+  key: string
+): Array<Record<string, unknown>> {
+  const metadata = (account.metadata ?? {}) as Record<string, unknown>;
+  const raw = metadata[key];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((item) => asObject(item))
+    .filter((item): item is Record<string, unknown> => Boolean(item));
+}
+
+function saveAccountMetadataCollection(params: {
+  tenantId: string;
+  accountId: string;
+  accountMetadata: Record<string, unknown> | undefined;
+  key: string;
+  collection: Array<Record<string, unknown>>;
+}): void {
+  updateTenantAccount({
+    tenantId: params.tenantId,
+    accountId: params.accountId,
+    metadata: {
+      ...(params.accountMetadata ?? {}),
+      [params.key]: params.collection,
+      [`${params.key}UpdatedAt`]: new Date().toISOString(),
+    },
+  });
+}
+
 customersRouter.get("/customers", (_req: Request, res: Response) => {
   const page = Math.max(1, parseInt(String(_req.query.page), 10) || 1);
   const pageSize = Math.min(100, Math.max(1, parseInt(String(_req.query.page_size), 10) || 20));
@@ -1030,6 +1063,142 @@ customersRouter.post(
   }
 );
 
+customersRouter.get(
+  "/customers/:customerId(cust_[A-Za-z0-9_]+)/accounts/:accountId(acct_[A-Za-z0-9_]+)/stopCheckPayments",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account || account.customerId !== req.params.customerId) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found for customer" });
+      return;
+    }
+
+    const data = getAccountMetadataCollection(account, "stopCheckPayments");
+    res.json({ data, total: data.length, environment: "sandbox" });
+  }
+);
+
+customersRouter.post(
+  "/customers/:customerId(cust_[A-Za-z0-9_]+)/accounts/:accountId(acct_[A-Za-z0-9_]+)/stopCheckPayments",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account || account.customerId !== req.params.customerId) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found for customer" });
+      return;
+    }
+
+    const payload = asObject(req.body) ?? {};
+    const data = getAccountMetadataCollection(account, "stopCheckPayments");
+    const record = {
+      id: String(payload.id ?? `scp_${Date.now()}`),
+      ...payload,
+      createdAt: new Date().toISOString(),
+    };
+    data.push(record);
+
+    saveAccountMetadataCollection({
+      tenantId: req.tenantId!,
+      accountId: account.id,
+      accountMetadata: account.metadata,
+      key: "stopCheckPayments",
+      collection: data,
+    });
+
+    res.status(201).json({ stopCheckPayment: record, environment: "sandbox" });
+  }
+);
+
+customersRouter.delete(
+  "/customers/:customerId(cust_[A-Za-z0-9_]+)/accounts/:accountId(acct_[A-Za-z0-9_]+)/stopCheckPayments/:stopCheckPaymentId",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account || account.customerId !== req.params.customerId) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found for customer" });
+      return;
+    }
+
+    const data = getAccountMetadataCollection(account, "stopCheckPayments");
+    const filtered = data.filter((item) => String(item.id) !== req.params.stopCheckPaymentId);
+
+    saveAccountMetadataCollection({
+      tenantId: req.tenantId!,
+      accountId: account.id,
+      accountMetadata: account.metadata,
+      key: "stopCheckPayments",
+      collection: filtered,
+    });
+
+    res.status(204).send();
+  }
+);
+
+customersRouter.get(
+  "/customers/:customerId(cust_[A-Za-z0-9_]+)/accounts/:accountId(acct_[A-Za-z0-9_]+)/stopAchPayments",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account || account.customerId !== req.params.customerId) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found for customer" });
+      return;
+    }
+
+    const data = getAccountMetadataCollection(account, "stopAchPayments");
+    res.json({ data, total: data.length, environment: "sandbox" });
+  }
+);
+
+customersRouter.post(
+  "/customers/:customerId(cust_[A-Za-z0-9_]+)/accounts/:accountId(acct_[A-Za-z0-9_]+)/stopAchPayments",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account || account.customerId !== req.params.customerId) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found for customer" });
+      return;
+    }
+
+    const payload = asObject(req.body) ?? {};
+    const data = getAccountMetadataCollection(account, "stopAchPayments");
+    const record = {
+      id: String(payload.id ?? `sap_${Date.now()}`),
+      ...payload,
+      createdAt: new Date().toISOString(),
+    };
+    data.push(record);
+
+    saveAccountMetadataCollection({
+      tenantId: req.tenantId!,
+      accountId: account.id,
+      accountMetadata: account.metadata,
+      key: "stopAchPayments",
+      collection: data,
+    });
+
+    res.status(201).json({ stopAchPayment: record, environment: "sandbox" });
+  }
+);
+
+customersRouter.delete(
+  "/customers/:customerId(cust_[A-Za-z0-9_]+)/accounts/:accountId(acct_[A-Za-z0-9_]+)/stopAchPayments/:stopAchPaymentId",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account || account.customerId !== req.params.customerId) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found for customer" });
+      return;
+    }
+
+    const data = getAccountMetadataCollection(account, "stopAchPayments");
+    const filtered = data.filter((item) => String(item.id) !== req.params.stopAchPaymentId);
+
+    saveAccountMetadataCollection({
+      tenantId: req.tenantId!,
+      accountId: account.id,
+      accountMetadata: account.metadata,
+      key: "stopAchPayments",
+      collection: filtered,
+    });
+
+    res.status(204).send();
+  }
+);
+
 customersRouter.post(
   "/customers/:customerId(cust_[A-Za-z0-9_]+)/linkBeneficiaryOwner/:beneficiaryId",
   (req: Request, res: Response) => {
@@ -1125,6 +1294,37 @@ customersRouter.post(
     };
     data.push(collateral);
     res.status(201).json({ collateral, environment: "sandbox" });
+  }
+);
+
+customersRouter.post(
+  "/customers/:customerId(cust_[A-Za-z0-9_]+)/creditCards",
+  (req: Request, res: Response) => {
+    const customer = getTenantCustomerById(req.tenantId!, req.params.customerId);
+    if (!customer) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Customer not found" });
+      return;
+    }
+
+    const payload = asObject(req.body) ?? {};
+    const metadata = (customer.metadata ?? {}) as Record<string, unknown>;
+    const existing = Array.isArray(metadata.creditCards)
+      ? metadata.creditCards.filter((item) => asObject(item))
+      : [];
+    const creditCard = {
+      id: String(payload.id ?? `cc_${Date.now()}`),
+      ...payload,
+      createdAt: new Date().toISOString(),
+    };
+    existing.push(creditCard);
+
+    customer.metadata = {
+      ...metadata,
+      creditCards: existing,
+      creditCardsUpdatedAt: new Date().toISOString(),
+    };
+
+    res.status(201).json({ creditCard, environment: "sandbox" });
   }
 );
 

@@ -6,6 +6,7 @@ import {
   mockTransfers,
 } from "./mock-data.js";
 import type { Account, Customer, Transaction, Transfer } from "../types/index.js";
+import { durableStore } from "./durable-store.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -58,6 +59,19 @@ interface TenantDataset {
   accountUserDefinedFields: Map<string, UserDefinedFieldRecord[]>;
   customerDocuments: Map<string, DocumentRecord[]>;
   accountDocuments: Map<string, DocumentRecord[]>;
+}
+
+interface PersistedTenantDataset {
+  accounts: Account[];
+  customers: Customer[];
+  transactions: Transaction[];
+  transfers: Transfer[];
+  yieldConfigs: Array<[string, YieldConfig]>;
+  loanPaymentsByAccount: Array<[string, LoanPaymentRecord[]]>;
+  customerUserDefinedFields: Array<[string, UserDefinedFieldRecord[]]>;
+  accountUserDefinedFields: Array<[string, UserDefinedFieldRecord[]]>;
+  customerDocuments: Array<[string, DocumentRecord[]]>;
+  accountDocuments: Array<[string, DocumentRecord[]]>;
 }
 
 const datasets = new Map<string, TenantDataset>();
@@ -305,13 +319,74 @@ function updateDocument(
   return updated;
 }
 
+function serializeTenantDataset(dataset: TenantDataset): string {
+  const persisted: PersistedTenantDataset = {
+    accounts: dataset.accounts,
+    customers: dataset.customers,
+    transactions: dataset.transactions,
+    transfers: dataset.transfers,
+    yieldConfigs: [...dataset.yieldConfigs.entries()],
+    loanPaymentsByAccount: [...dataset.loanPaymentsByAccount.entries()],
+    customerUserDefinedFields: [...dataset.customerUserDefinedFields.entries()],
+    accountUserDefinedFields: [...dataset.accountUserDefinedFields.entries()],
+    customerDocuments: [...dataset.customerDocuments.entries()],
+    accountDocuments: [...dataset.accountDocuments.entries()],
+  };
+
+  return JSON.stringify(persisted);
+}
+
+function deserializeTenantDataset(payload: string): TenantDataset {
+  const parsed = JSON.parse(payload) as Partial<PersistedTenantDataset>;
+
+  return {
+    accounts: Array.isArray(parsed.accounts) ? parsed.accounts : [],
+    customers: Array.isArray(parsed.customers) ? parsed.customers : [],
+    transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
+    transfers: Array.isArray(parsed.transfers) ? parsed.transfers : [],
+    yieldConfigs: new Map(parsed.yieldConfigs ?? []),
+    loanPaymentsByAccount: new Map(parsed.loanPaymentsByAccount ?? []),
+    customerUserDefinedFields: new Map(parsed.customerUserDefinedFields ?? []),
+    accountUserDefinedFields: new Map(parsed.accountUserDefinedFields ?? []),
+    customerDocuments: new Map(parsed.customerDocuments ?? []),
+    accountDocuments: new Map(parsed.accountDocuments ?? []),
+  };
+}
+
+function saveTenantDataset(tenantId: string, dataset: TenantDataset): void {
+  durableStore.saveTenantDatasetPayload(tenantId, serializeTenantDataset(dataset));
+}
+
 function ensureTenantDataset(tenantId: string): TenantDataset {
   let dataset = datasets.get(tenantId);
   if (!dataset) {
-    dataset = cloneDataset();
+    const persisted = durableStore.getTenantDatasetPayload(tenantId);
+
+    if (persisted) {
+      try {
+        dataset = deserializeTenantDataset(persisted);
+      } catch {
+        dataset = cloneDataset();
+        saveTenantDataset(tenantId, dataset);
+      }
+    } else {
+      dataset = cloneDataset();
+      saveTenantDataset(tenantId, dataset);
+    }
+
     datasets.set(tenantId, dataset);
   }
   return dataset;
+}
+
+export function flushTenantStore(): void {
+  for (const [tenantId, dataset] of datasets.entries()) {
+    saveTenantDataset(tenantId, dataset);
+  }
+}
+
+export function resetTenantStoreRuntimeCacheForTests(): void {
+  datasets.clear();
 }
 
 export function listTenantAccounts(tenantId: string, customerId?: string): Account[] {

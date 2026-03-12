@@ -29,6 +29,39 @@ function asObject(value: unknown): Record<string, unknown> | undefined {
   return value as Record<string, unknown>;
 }
 
+function getAccountMetadataCollection(
+  account: Account,
+  key: string
+): Array<Record<string, unknown>> {
+  const metadata = (account.metadata ?? {}) as Record<string, unknown>;
+  const raw = metadata[key];
+
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((item) => asObject(item))
+    .filter((item): item is Record<string, unknown> => Boolean(item));
+}
+
+function saveAccountMetadataCollection(params: {
+  tenantId: string;
+  account: Account;
+  key: string;
+  collection: Array<Record<string, unknown>>;
+}): Account | undefined {
+  return updateTenantAccount({
+    tenantId: params.tenantId,
+    accountId: params.account.id,
+    metadata: {
+      ...((params.account.metadata ?? {}) as Record<string, unknown>),
+      [params.key]: params.collection,
+      [`${params.key}UpdatedAt`]: new Date().toISOString(),
+    },
+  });
+}
+
 accountsRouter.get("/accounts", (_req: Request, res: Response) => {
   const page = Math.max(1, parseInt(String(_req.query.page), 10) || 1);
   const pageSize = Math.min(100, Math.max(1, parseInt(String(_req.query.page_size), 10) || 20));
@@ -351,5 +384,335 @@ accountsRouter.delete(
     }
 
     res.status(204).send();
+  }
+);
+
+accountsRouter.get(
+  "/accounts/:accountId(acct_[A-Za-z0-9_]+)/escrowDisbursements",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const data = getAccountMetadataCollection(account, "escrowDisbursements");
+    res.json({ data, total: data.length, environment: "sandbox" });
+  }
+);
+
+accountsRouter.post(
+  "/accounts/:accountId(acct_[A-Za-z0-9_]+)/escrowDisbursements",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const payload = asObject(req.body) ?? {};
+    const data = getAccountMetadataCollection(account, "escrowDisbursements");
+    const record = {
+      id: String(payload.id ?? `escd_${Date.now()}`),
+      ...payload,
+      createdAt: new Date().toISOString(),
+    };
+    data.push(record);
+
+    saveAccountMetadataCollection({
+      tenantId: req.tenantId!,
+      account,
+      key: "escrowDisbursements",
+      collection: data,
+    });
+
+    res.status(201).json({ escrowDisbursement: record, environment: "sandbox" });
+  }
+);
+
+accountsRouter.get(
+  "/accounts/:accountId(acct_[A-Za-z0-9_]+)/escrowProjections",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const data = getAccountMetadataCollection(account, "escrowProjections");
+    res.json({ data, total: data.length, environment: "sandbox" });
+  }
+);
+
+accountsRouter.post(
+  "/accounts/:accountId(acct_[A-Za-z0-9_]+)/escrowProjections",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const payload = asObject(req.body) ?? {};
+    const data = getAccountMetadataCollection(account, "escrowProjections");
+    const record = {
+      id: String(payload.id ?? `escp_${Date.now()}`),
+      ...payload,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    data.push(record);
+
+    saveAccountMetadataCollection({
+      tenantId: req.tenantId!,
+      account,
+      key: "escrowProjections",
+      collection: data,
+    });
+
+    res.status(201).json({ escrowProjection: record, environment: "sandbox" });
+  }
+);
+
+accountsRouter.patch(
+  "/accounts/:accountId(acct_[A-Za-z0-9_]+)/escrowProjections",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const payload = asObject(req.body) ?? {};
+    const data = getAccountMetadataCollection(account, "escrowProjections");
+    const id = String(payload.id ?? data[0]?.id ?? `escp_${Date.now()}`);
+    const index = data.findIndex((item) => String(item.id) === id);
+    const updated = {
+      ...(index >= 0 ? data[index] : {}),
+      ...payload,
+      id,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (index >= 0) {
+      data[index] = updated;
+    } else {
+      data.push(updated);
+    }
+
+    saveAccountMetadataCollection({
+      tenantId: req.tenantId!,
+      account,
+      key: "escrowProjections",
+      collection: data,
+    });
+
+    res.json({ escrowProjection: updated, environment: "sandbox" });
+  }
+);
+
+accountsRouter.get(
+  "/accounts/:accountId(acct_[A-Za-z0-9_]+)/loanChargeAssessment",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const data = getAccountMetadataCollection(account, "loanChargeAssessment");
+    res.json({ data, total: data.length, environment: "sandbox" });
+  }
+);
+
+accountsRouter.post(
+  "/accounts/:accountId(acct_[A-Za-z0-9_]+)/loanChargeAssessment",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const payload = asObject(req.body) ?? {};
+    const data = getAccountMetadataCollection(account, "loanChargeAssessment");
+    const record = {
+      id: String(payload.id ?? `lca_${Date.now()}`),
+      ...payload,
+      assessedAt: new Date().toISOString(),
+    };
+    data.push(record);
+
+    saveAccountMetadataCollection({
+      tenantId: req.tenantId!,
+      account,
+      key: "loanChargeAssessment",
+      collection: data,
+    });
+
+    res.status(201).json({ loanChargeAssessment: record, environment: "sandbox" });
+  }
+);
+
+accountsRouter.post(
+  "/accounts/:accountId(acct_[A-Za-z0-9_]+)/reservePremium",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const payload = asObject(req.body) ?? {};
+    const updated = updateTenantAccount({
+      tenantId: req.tenantId!,
+      accountId: account.id,
+      metadata: {
+        reservePremium: payload,
+        reservePremiumUpdatedAt: new Date().toISOString(),
+      },
+    });
+
+    res.status(201).json({ account: updated ?? account, environment: "sandbox" });
+  }
+);
+
+accountsRouter.post(
+  "/accounts/:accountId(acct_[A-Za-z0-9_]+)/originalLtv",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const payload = asObject(req.body) ?? {};
+    const updated = updateTenantAccount({
+      tenantId: req.tenantId!,
+      accountId: account.id,
+      metadata: {
+        originalLtv: payload,
+        originalLtvUpdatedAt: new Date().toISOString(),
+      },
+    });
+
+    res.status(201).json({ account: updated ?? account, environment: "sandbox" });
+  }
+);
+
+accountsRouter.post(
+  "/accounts/:accountId(acct_[A-Za-z0-9_]+)/remoteDeposits",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const payload = asObject(req.body) ?? {};
+    const data = getAccountMetadataCollection(account, "remoteDeposits");
+    const record = {
+      id: String(payload.id ?? `rd_${Date.now()}`),
+      ...payload,
+      submittedAt: new Date().toISOString(),
+    };
+    data.push(record);
+
+    saveAccountMetadataCollection({
+      tenantId: req.tenantId!,
+      account,
+      key: "remoteDeposits",
+      collection: data,
+    });
+
+    res.status(201).json({ remoteDeposit: record, environment: "sandbox" });
+  }
+);
+
+accountsRouter.get(
+  "/accounts/:accountId(acct_[A-Za-z0-9_]+)/statements",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const data = getAccountMetadataCollection(account, "statements");
+    if (data.length === 0) {
+      const seeded = {
+        id: `stmt_${new Date().toISOString().slice(0, 10)}`,
+        period: new Date().toISOString().slice(0, 7),
+        generatedAt: new Date().toISOString(),
+      };
+      data.push(seeded);
+      saveAccountMetadataCollection({
+        tenantId: req.tenantId!,
+        account,
+        key: "statements",
+        collection: data,
+      });
+    }
+
+    res.json({ data, total: data.length, environment: "sandbox" });
+  }
+);
+
+accountsRouter.get(
+  "/accounts/:accountId(acct_[A-Za-z0-9_]+)/statements/:statementId",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const data = getAccountMetadataCollection(account, "statements");
+    let statement = data.find((item) => String(item.id) === req.params.statementId);
+    if (!statement) {
+      statement = {
+        id: req.params.statementId,
+        period: new Date().toISOString().slice(0, 7),
+        generatedAt: new Date().toISOString(),
+      };
+      data.push(statement);
+      saveAccountMetadataCollection({
+        tenantId: req.tenantId!,
+        account,
+        key: "statements",
+        collection: data,
+      });
+    }
+
+    res.json({ statement, environment: "sandbox" });
+  }
+);
+
+accountsRouter.post(
+  "/accounts/:accountId(acct_[A-Za-z0-9_]+)/stopCheckPayments",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const payload = asObject(req.body) ?? {};
+    const data = getAccountMetadataCollection(account, "stopCheckPayments");
+    const record = {
+      id: String(payload.id ?? `scp_${Date.now()}`),
+      ...payload,
+      createdAt: new Date().toISOString(),
+    };
+    data.push(record);
+
+    saveAccountMetadataCollection({
+      tenantId: req.tenantId!,
+      account,
+      key: "stopCheckPayments",
+      collection: data,
+    });
+
+    res.status(201).json({ stopCheckPayment: record, environment: "sandbox" });
   }
 );

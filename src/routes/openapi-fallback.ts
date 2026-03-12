@@ -7,6 +7,7 @@ import { parse } from "yaml";
 import { validateAccessToken } from "../auth/oauth.js";
 import { checkApiRateLimit } from "../services/security-rate-limit.js";
 import { enforceEnvironmentScope } from "../auth/middleware.js";
+import { durableStore } from "../services/durable-store.js";
 
 type RouteMethod = "get" | "post" | "put" | "patch" | "delete" | "options" | "head";
 type JsonObject = Record<string, unknown>;
@@ -151,10 +152,45 @@ function getCatalog(): ContractCatalog {
   return cachedCatalog;
 }
 
+function serializeTenantStore(tenantStore: Map<string, Map<string, StoredRecord>>): string {
+  const payload = [...tenantStore.entries()].map(([resourcePath, records]) => [
+    resourcePath,
+    [...records.entries()],
+  ]);
+
+  return JSON.stringify(payload);
+}
+
+function deserializeTenantStore(payload: string): Map<string, Map<string, StoredRecord>> {
+  const parsed = JSON.parse(payload) as Array<[string, Array<[string, StoredRecord]>]>;
+  const tenantStore = new Map<string, Map<string, StoredRecord>>();
+
+  for (const [resourcePath, records] of parsed) {
+    tenantStore.set(resourcePath, new Map(records));
+  }
+
+  return tenantStore;
+}
+
+function saveTenantStore(tenantId: string, tenantStore: Map<string, Map<string, StoredRecord>>): void {
+  durableStore.saveFallbackDatasetPayload(tenantId, serializeTenantStore(tenantStore));
+}
+
 function getTenantStore(tenantId: string): Map<string, Map<string, StoredRecord>> {
   let tenantStore = runtimeStoreByTenant.get(tenantId);
   if (!tenantStore) {
-    tenantStore = new Map<string, Map<string, StoredRecord>>();
+    const persisted = durableStore.getFallbackDatasetPayload(tenantId);
+
+    if (persisted) {
+      try {
+        tenantStore = deserializeTenantStore(persisted);
+      } catch {
+        tenantStore = new Map<string, Map<string, StoredRecord>>();
+      }
+    } else {
+      tenantStore = new Map<string, Map<string, StoredRecord>>();
+    }
+
     runtimeStoreByTenant.set(tenantId, tenantStore);
   }
 
@@ -438,6 +474,7 @@ function listResourceRecords(resourceStore: Map<string, StoredRecord>, req: Requ
 
 function executeContractRequest(route: ContractRoute, req: Request, res: Response): void {
   const tenantId = req.tenantId ?? "tenant_public";
+  const tenantStore = getTenantStore(tenantId);
   const resourceStore = getResourceStore(tenantId, route.resourcePath);
   const method = route.method;
 
@@ -458,6 +495,7 @@ function executeContractRequest(route: ContractRoute, req: Request, res: Respons
   if (method === "delete") {
     const entityId = inferEntityId(route, req);
     resourceStore.delete(entityId);
+    saveTenantStore(tenantId, tenantStore);
 
     if (route.successStatus === 204) {
       res.status(204).send();
@@ -494,6 +532,7 @@ function executeContractRequest(route: ContractRoute, req: Request, res: Respons
           updatedAt: now,
         };
         resourceStore.set(entityId, record);
+        saveTenantStore(tenantId, tenantStore);
       }
 
       if (route.successStatus === 204) {
@@ -550,6 +589,7 @@ function executeContractRequest(route: ContractRoute, req: Request, res: Respons
   };
 
   resourceStore.set(entityId, nextRecord);
+  saveTenantStore(tenantId, tenantStore);
 
   if (route.successStatus === 204) {
     res.status(204).send();
@@ -564,6 +604,12 @@ function executeContractRequest(route: ContractRoute, req: Request, res: Respons
   });
 
   res.status(route.successStatus).json(payload);
+}
+
+export function flushFallbackRuntimeStore(): void {
+  for (const [tenantId, tenantStore] of runtimeStoreByTenant.entries()) {
+    saveTenantStore(tenantId, tenantStore);
+  }
 }
 
 function enforceFallbackApiRateLimit(route: ContractRoute, req: Request, res: Response): boolean {

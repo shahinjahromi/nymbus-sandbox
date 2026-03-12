@@ -11,6 +11,8 @@ import { customersRouter } from "./routes/customers.js";
 import { transfersRouter } from "./routes/transfers.js";
 import { portalRouter } from "./routes/portal.js";
 import { openApiFallbackRouter } from "./routes/openapi-fallback.js";
+import { flushTenantStore } from "./services/tenant-store.js";
+import { flushFallbackRuntimeStore } from "./routes/openapi-fallback.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -20,6 +22,14 @@ const coreApiVersions = ["/v1.0", "/v1.1", "/v1.2", "/v1.3", "/v1.4", "/v1.5"] a
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use((_, res, next) => {
+  res.once("finish", () => {
+    flushTenantStore();
+    flushFallbackRuntimeStore();
+  });
+  next();
+});
 
 app.get("/health", (_req, res) => {
   res.json({
