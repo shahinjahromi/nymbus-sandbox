@@ -85,7 +85,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/jso
 
 - **OpenAPI (YAML):** `GET /docs` returns the sandbox API spec.
 - **Versioned API support:** implemented core resources are available on unversioned paths and versioned prefixes (`/v1.0` to `/v1.5`) for parity progression with bundled Nymbus contracts.
-- **Contract fallback coverage:** bundled OpenAPI path/method pairs that are not yet specialized are still routed by local sandbox handlers and return a contract-stub marker header `x-sandbox-contract-stub: true`.
+- **Contract fallback coverage:** bundled OpenAPI path/method pairs that are not yet specialized are still routed by local sandbox handlers with tenant-scoped, stateful execution.
 - **Portal UI:** `GET /portal` serves the sandbox developer portal client.
 - **Portal API:**
   - Auth/session: `POST /portal-api/register`, `POST /portal-api/login`, `POST /portal-api/password-reset/*`, `GET /portal-api/me`

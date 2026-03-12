@@ -323,4 +323,18 @@ Format per entry:
 
 ---
 
+### 17. REQ-F-005 contract parity tranche: stateful fallback execution without stubbed responses
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-005
+- **Requirement title:** Full Core contract parity (incremental slice: replace stub fallback responses with local stateful execution behavior)
+- **Files changed:**
+  - `src/routes/openapi-fallback.ts` (replaced static stub response semantics with tenant-scoped stateful create/read/update/delete/list execution aligned to contract route metadata)
+  - `tests/req-f-005-no-stubbed-responses.test.ts` (new; validates fallback responses are functional and no longer expose stub marker semantics)
+  - `README.md` (updated fallback behavior documentation to reflect stateful local execution)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Removed contract stub response behavior from the fallback path and implemented generic local-runtime state transitions so unsupported-by-specialized-router contract operations still provide functional tenant-scoped behavior. Added an explicit regression test to ensure fallback responses do not expose stub markers/messages.
+
+---
+
 *(Add new entries at the bottom when implementing further requirements.)*
