@@ -43,7 +43,7 @@ import { checkPortalAuthRateLimit } from "../services/security-rate-limit.js";
 
 export const portalRouter = Router();
 
-function requirePortalSession(req: Request, res: Response, next: NextFunction): void {
+async function requirePortalSession(req: Request, res: Response, next: NextFunction): Promise<void> {
   const auth = req.headers.authorization;
   if (!auth || !auth.startsWith("Bearer ")) {
     res.status(401).json({ code: "UNAUTHORIZED", message: "Portal session required" });
@@ -51,7 +51,7 @@ function requirePortalSession(req: Request, res: Response, next: NextFunction): 
   }
 
   const token = auth.slice(7);
-  const { valid, email, tenantId } = validatePortalSession(token);
+  const { valid, email, tenantId } = await validatePortalSession(token);
   if (!valid || !email || !tenantId) {
     res.status(401).json({ code: "INVALID_PORTAL_SESSION", message: "Portal session expired" });
     return;
@@ -790,7 +790,7 @@ portalRouter.post("/portal-api/interest/accrue-daily", requirePortalSession, (re
   });
 });
 
-portalRouter.get("/portal-api/api-activity", requirePortalSession, (req: Request, res: Response) => {
+portalRouter.get("/portal-api/api-activity", requirePortalSession, async (req: Request, res: Response) => {
   const { method, path_contains: pathContains, status, limit, environment } = req.query;
   const normalizedEnvironment =
     typeof environment === "string" && environment.trim().length > 0
@@ -802,7 +802,7 @@ portalRouter.get("/portal-api/api-activity", requirePortalSession, (req: Request
     return;
   }
 
-  const entries = listApiActivityForTenant({
+  const entries = await listApiActivityForTenant({
     tenantId: req.portalTenantId!,
     environment: "sandbox",
     method: typeof method === "string" ? method : undefined,
@@ -831,11 +831,11 @@ portalRouter.get(
   }
 );
 
-portalRouter.get("/portal-api/audit", requirePortalSession, (req: Request, res: Response) => {
+portalRouter.get("/portal-api/audit", requirePortalSession, async (req: Request, res: Response) => {
   const limit =
     typeof req.query.limit === "string" ? Number.parseInt(req.query.limit, 10) : undefined;
   res.json({
-    data: listTenantAuditEntries(req.portalTenantId!, limit),
+    data: await listTenantAuditEntries(req.portalTenantId!, limit),
     environment: "sandbox",
   });
 });

@@ -11,21 +11,21 @@ function makeCompositeKey(params: {
   return `${params.tenantId}:${params.method.toUpperCase()}:${params.route}:${params.key}`;
 }
 
-export function getIdempotentReplay<T>(params: {
+export async function getIdempotentReplay<T>(params: {
   tenantId: string;
   method: string;
   route: string;
   key: string;
-}): { statusCode: number; payload: T } | null {
+}): Promise<{ statusCode: number; payload: T } | null> {
   const compositeKey = makeCompositeKey(params);
-  const row = durableStore.getIdempotencyRecord(compositeKey);
+  const row = await durableStore.getIdempotencyRecord(compositeKey);
   if (!row) {
     return null;
   }
 
   if (Date.now() - row.created_at > TWENTY_FOUR_HOURS_MS) {
     // Expired — clean up
-    durableStore.deleteExpiredIdempotencyRecords(TWENTY_FOUR_HOURS_MS);
+    await durableStore.deleteExpiredIdempotencyRecords(TWENTY_FOUR_HOURS_MS);
     return null;
   }
 
@@ -53,5 +53,5 @@ export function saveIdempotentResult<T>(params: {
     created_at: Date.now(),
     status_code: params.statusCode,
     payload: JSON.stringify(params.payload),
-  });
+  }).catch((err) => console.error("[idempotency] save failed:", err));
 }

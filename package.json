@@ -22,12 +22,14 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
+    "mssql": "^12.2.0",
     "uuid": "^10.0.0",
     "yaml": "^2.8.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
+    "@types/mssql": "^9.1.9",
     "@types/node": "^22.9.0",
     "@types/supertest": "^6.0.2",
     "@types/uuid": "^10.0.0",

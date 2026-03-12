@@ -562,7 +562,7 @@ function rowToDocument(r: DocumentRow): DocumentRecord {
 /*  Flush / load using relational entity tables                               */
 /* -------------------------------------------------------------------------- */
 
-function saveTenantDataset(tenantId: string, dataset: TenantDataset): void {
+async function saveTenantDataset(tenantId: string, dataset: TenantDataset): Promise<void> {
   // Collect all UDF rows
   const udfRows: UserDefinedFieldRow[] = [];
   for (const [scopeKey, records] of dataset.customerUserDefinedFields.entries()) {
@@ -587,7 +587,7 @@ function saveTenantDataset(tenantId: string, dataset: TenantDataset): void {
     for (const r of records) lpRows.push(loanPaymentToRow(tenantId, r));
   }
 
-  durableStore.saveTenantEntities(tenantId, {
+  await durableStore.saveTenantEntities(tenantId, {
     customers: dataset.customers.map((c) => customerToRow(tenantId, c)),
     accounts: dataset.accounts.map((a) => accountToRow(tenantId, a)),
     transactions: dataset.transactions.map((t) => transactionToRow(tenantId, t)),
@@ -599,8 +599,8 @@ function saveTenantDataset(tenantId: string, dataset: TenantDataset): void {
   });
 }
 
-function loadTenantDatasetFromDb(tenantId: string): TenantDataset | null {
-  const loaded = durableStore.loadTenantEntities(tenantId);
+async function loadTenantDatasetFromDb(tenantId: string): Promise<TenantDataset | null> {
+  const loaded = await durableStore.loadTenantEntities(tenantId);
   if (!loaded) return null;
 
   const yieldConfigs = new Map<string, YieldConfig>();
@@ -650,53 +650,40 @@ function loadTenantDatasetFromDb(tenantId: string): TenantDataset | null {
 function ensureTenantDataset(tenantId: string): TenantDataset {
   let dataset = datasets.get(tenantId);
   if (!dataset) {
-    // Try loading from relational entity tables
-    const fromDb = loadTenantDatasetFromDb(tenantId);
-    if (fromDb) {
-      dataset = fromDb;
-    } else {
-      // Fall back to legacy blob (migration path), then to baseline clone
-      const persisted = durableStore.getTenantDatasetPayload(tenantId);
-      if (persisted) {
-        try {
-          const parsed = JSON.parse(persisted) as Record<string, unknown>;
-          dataset = {
-            accounts: Array.isArray(parsed.accounts) ? (parsed.accounts as Account[]) : [],
-            customers: Array.isArray(parsed.customers) ? (parsed.customers as Customer[]) : [],
-            transactions: Array.isArray(parsed.transactions) ? (parsed.transactions as Transaction[]) : [],
-            transfers: Array.isArray(parsed.transfers) ? (parsed.transfers as Transfer[]) : [],
-            yieldConfigs: new Map(Array.isArray(parsed.yieldConfigs) ? (parsed.yieldConfigs as Array<[string, YieldConfig]>) : []),
-            loanPaymentsByAccount: new Map(Array.isArray(parsed.loanPaymentsByAccount) ? (parsed.loanPaymentsByAccount as Array<[string, LoanPaymentRecord[]]>) : []),
-            customerUserDefinedFields: new Map(Array.isArray(parsed.customerUserDefinedFields) ? (parsed.customerUserDefinedFields as Array<[string, UserDefinedFieldRecord[]]>) : []),
-            accountUserDefinedFields: new Map(Array.isArray(parsed.accountUserDefinedFields) ? (parsed.accountUserDefinedFields as Array<[string, UserDefinedFieldRecord[]]>) : []),
-            customerDocuments: new Map(Array.isArray(parsed.customerDocuments) ? (parsed.customerDocuments as Array<[string, DocumentRecord[]]>) : []),
-            accountDocuments: new Map(Array.isArray(parsed.accountDocuments) ? (parsed.accountDocuments as Array<[string, DocumentRecord[]]>) : []),
-          };
-          // Migrate: save to entity tables
-          saveTenantDataset(tenantId, dataset);
-        } catch {
-          dataset = cloneDataset();
-          saveTenantDataset(tenantId, dataset);
-        }
-      } else {
-        dataset = cloneDataset();
-        saveTenantDataset(tenantId, dataset);
-      }
-    }
-
+    // After initTenantStore() all persisted tenants are in the cache.
+    // A cache miss means the tenant is new → start from baseline clone.
+    dataset = cloneDataset();
     datasets.set(tenantId, dataset);
   }
   return dataset;
 }
 
-export function flushTenantStore(): void {
-  for (const [tenantId, dataset] of datasets.entries()) {
-    saveTenantDataset(tenantId, dataset);
+/**
+ * Pre-load all existing tenant datasets from the DB into the in-memory
+ * cache.  Must be called (and awaited) at startup before the server
+ * accepts requests.
+ */
+export async function initTenantStore(): Promise<void> {
+  const tenantIds = await durableStore.getDistinctTenantIds();
+  for (const tenantId of tenantIds) {
+    const fromDb = await loadTenantDatasetFromDb(tenantId);
+    if (fromDb) {
+      datasets.set(tenantId, fromDb);
+    }
   }
 }
 
-export function resetTenantStoreRuntimeCacheForTests(): void {
+export async function flushTenantStore(): Promise<void> {
+  for (const [tenantId, dataset] of datasets.entries()) {
+    await saveTenantDataset(tenantId, dataset);
+  }
+}
+
+export async function resetTenantStoreRuntimeCacheForTests(): Promise<void> {
+  // Flush current data to DB, clear in-memory cache, then reload from DB
+  await flushTenantStore();
   datasets.clear();
+  await initTenantStore();
 }
 
 export function listTenantAccounts(tenantId: string, customerId?: string): Account[] {

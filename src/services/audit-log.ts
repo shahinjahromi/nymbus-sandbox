@@ -30,14 +30,13 @@ export function writeAuditEntry(params: {
     timestamp: new Date().toISOString(),
     request_id: params.requestId ?? null,
     details: params.details ? JSON.stringify(params.details) : null,
-  });
-
-  // Keep at most 1000 entries per tenant
-  durableStore.pruneAuditLog(params.tenantId, 1000);
+  })
+    .then(() => durableStore.pruneAuditLog(params.tenantId, 1000))
+    .catch((err) => console.error("[audit-log] write failed:", err));
 }
 
-export function listTenantAuditEntries(tenantId: string, limit = 100): AuditEntry[] {
-  const rows = durableStore.listAuditEntries(tenantId, limit);
+export async function listTenantAuditEntries(tenantId: string, limit = 100): Promise<AuditEntry[]> {
+  const rows = await durableStore.listAuditEntries(tenantId, limit);
 
   return rows.map((r) => ({
     id: r.id,

@@ -62,7 +62,7 @@ describe("REQ-F-005: durable persistence", () => {
 
     const transferId = transferRes.body.id as string;
 
-    resetTenantStoreRuntimeCacheForTests();
+    await resetTenantStoreRuntimeCacheForTests();
 
     const transferReadRes = await request(app)
       .get(`/v1.0/transfers/${transferId}`)

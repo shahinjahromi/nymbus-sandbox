@@ -173,13 +173,14 @@ function deserializeTenantStore(payload: string): Map<string, Map<string, Stored
 }
 
 function saveTenantStore(tenantId: string, tenantStore: Map<string, Map<string, StoredRecord>>): void {
-  durableStore.saveFallbackDatasetPayload(tenantId, serializeTenantStore(tenantStore));
+  durableStore.saveFallbackDatasetPayload(tenantId, serializeTenantStore(tenantStore))
+    .catch((err) => console.error("[openapi-fallback] persist failed:", err));
 }
 
-function getTenantStore(tenantId: string): Map<string, Map<string, StoredRecord>> {
+async function getTenantStore(tenantId: string): Promise<Map<string, Map<string, StoredRecord>>> {
   let tenantStore = runtimeStoreByTenant.get(tenantId);
   if (!tenantStore) {
-    const persisted = durableStore.getFallbackDatasetPayload(tenantId);
+    const persisted = await durableStore.getFallbackDatasetPayload(tenantId);
 
     if (persisted) {
       try {
@@ -197,8 +198,8 @@ function getTenantStore(tenantId: string): Map<string, Map<string, StoredRecord>
   return tenantStore;
 }
 
-function getResourceStore(tenantId: string, resourcePath: string): Map<string, StoredRecord> {
-  const tenantStore = getTenantStore(tenantId);
+async function getResourceStore(tenantId: string, resourcePath: string): Promise<Map<string, StoredRecord>> {
+  const tenantStore = await getTenantStore(tenantId);
   let resourceStore = tenantStore.get(resourcePath);
   if (!resourceStore) {
     resourceStore = new Map<string, StoredRecord>();
@@ -472,10 +473,10 @@ function listResourceRecords(resourceStore: Map<string, StoredRecord>, req: Requ
   return all.slice(start, start + pageLimit);
 }
 
-function executeContractRequest(route: ContractRoute, req: Request, res: Response): void {
+async function executeContractRequest(route: ContractRoute, req: Request, res: Response): Promise<void> {
   const tenantId = req.tenantId ?? "tenant_public";
-  const tenantStore = getTenantStore(tenantId);
-  const resourceStore = getResourceStore(tenantId, route.resourcePath);
+  const tenantStore = await getTenantStore(tenantId);
+  const resourceStore = await getResourceStore(tenantId, route.resourcePath);
   const method = route.method;
 
   if (!operationMethods.has(method)) {
@@ -606,7 +607,7 @@ function executeContractRequest(route: ContractRoute, req: Request, res: Respons
   res.status(route.successStatus).json(payload);
 }
 
-export function flushFallbackRuntimeStore(): void {
+export async function flushFallbackRuntimeStore(): Promise<void> {
   for (const [tenantId, tenantStore] of runtimeStoreByTenant.entries()) {
     saveTenantStore(tenantId, tenantStore);
   }
@@ -639,17 +640,17 @@ function enforceFallbackApiRateLimit(route: ContractRoute, req: Request, res: Re
 export const openApiFallbackRouter = Router();
 
 for (const route of getBundledContractRoutes()) {
-  openApiFallbackRouter[route.method](route.expressPath, (req: Request, res: Response) => {
+  openApiFallbackRouter[route.method](route.expressPath, async (req: Request, res: Response) => {
     if (!route.secured) {
-      executeContractRequest(route, req, res);
+      await executeContractRequest(route, req, res);
       return;
     }
 
-    ensureFallbackAuth(req, res, () => {
+    ensureFallbackAuth(req, res, async () => {
       if (!enforceFallbackApiRateLimit(route, req, res)) {
         return;
       }
-      executeContractRequest(route, req, res);
+      await executeContractRequest(route, req, res);
     });
   });
 }

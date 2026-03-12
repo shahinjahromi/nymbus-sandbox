@@ -59,11 +59,11 @@ function tenantIdFromEmail(email: string): string {
 }
 
 /** Load users and sessions from DB into in-memory cache (once) */
-function ensureCache(): void {
+export async function initPortalAuth(): Promise<void> {
   if (cacheLoaded) return;
   cacheLoaded = true;
 
-  for (const row of durableStore.getAllPortalUsers()) {
+  for (const row of await durableStore.getAllPortalUsers()) {
     usersByEmail.set(row.email, {
       email: row.email,
       passwordHash: row.password_hash,
@@ -76,7 +76,13 @@ function ensureCache(): void {
   }
 
   // Sessions are short-lived; we don't reload stale ones
-  durableStore.deleteExpiredSessions();
+  await durableStore.deleteExpiredSessions();
+}
+
+function ensureCache(): void {
+  if (!cacheLoaded) {
+    throw new Error("Portal auth not initialised — call initPortalAuth() at startup");
+  }
 }
 
 function persistUser(user: PortalUser): void {
@@ -88,7 +94,7 @@ function persistUser(user: PortalUser): void {
     created_at: user.createdAt,
     failed_login_attempts: user.failedLoginAttempts,
     blocked_until: user.blockedUntil ?? null,
-  });
+  }).catch((err) => console.error("[portal-auth] persist user failed:", err));
 }
 
 function persistSession(session: PortalSession): void {
@@ -98,7 +104,7 @@ function persistSession(session: PortalSession): void {
     tenant_id: session.tenantId,
     created_at: session.createdAt,
     expires_at: session.expiresAt,
-  });
+  }).catch((err) => console.error("[portal-auth] persist session failed:", err));
 }
 
 export function registerPortalUser(params: {
@@ -176,18 +182,18 @@ export function authenticatePortalUser(params: {
   };
 }
 
-export function validatePortalSession(token: string): {
+export async function validatePortalSession(token: string): Promise<{
   valid: boolean;
   email?: string;
   tenantId?: string;
-} {
+}> {
   ensureCache();
 
   // Check in-memory first
   let session = sessionsByToken.get(token);
   if (!session) {
     // Try DB (session might have been created in a previous process)
-    const row = durableStore.getPortalSession(token);
+    const row = await durableStore.getPortalSession(token);
     if (row && Date.now() <= row.expires_at) {
       session = {
         token: row.token,

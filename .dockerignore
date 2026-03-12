@@ -1,0 +1,9 @@
+node_modules
+portal/node_modules
+.git
+*.md
+tests
+.env*
+*.db
+*.sqlite
+dist

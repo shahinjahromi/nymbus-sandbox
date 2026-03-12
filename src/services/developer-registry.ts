@@ -100,21 +100,47 @@ function recordToRow(r: CredentialRecord): CredentialRow {
 }
 
 function persistCredential(record: CredentialRecord): void {
-  durableStore.upsertCredential(recordToRow(record));
+  durableStore.upsertCredential(recordToRow(record)).catch((err) =>
+    console.error("[developer-registry] persist credential failed:", err),
+  );
 }
 
 /* -------------------------------------------------------------------------- */
 /*  Cache initialization (load from DB once)                                  */
 /* -------------------------------------------------------------------------- */
 
-function ensureCache(): void {
+export async function initDeveloperRegistry(): Promise<void> {
   if (cacheLoaded) return;
   cacheLoaded = true;
 
-  for (const row of durableStore.getAllCredentials()) {
+  for (const row of await durableStore.getAllCredentials()) {
     const record = rowToRecord(row);
     credentialsById.set(record.id, record);
     credentialIdByClientId.set(record.clientId, record.id);
+  }
+
+  // Ensure default developer credential exists
+  const { defaultClientId, defaultClientSecret } = config.oauth;
+  if (!credentialIdByClientId.has(defaultClientId)) {
+    const id = "cred_default";
+    const record: CredentialRecord = {
+      id,
+      tenantId: DEFAULT_TENANT_ID,
+      clientId: defaultClientId,
+      clientSecret: defaultClientSecret,
+      label: "Default sandbox credential",
+      createdAt: nowIso(),
+      status: "active",
+    };
+    credentialsById.set(id, record);
+    credentialIdByClientId.set(defaultClientId, id);
+    await durableStore.upsertCredential(recordToRow(record));
+  }
+}
+
+function ensureCache(): void {
+  if (!cacheLoaded) {
+    throw new Error("Developer registry not initialised — call initDeveloperRegistry() at startup");
   }
 }
 
@@ -138,31 +164,6 @@ function toCredentialView(record: CredentialRecord): CredentialView {
 function isExpired(record: CredentialRecord): boolean {
   return Boolean(record.expiresAt && Date.now() > Date.parse(record.expiresAt));
 }
-
-function ensureDefaultDeveloper(): void {
-  ensureCache();
-  const { defaultClientId, defaultClientSecret } = config.oauth;
-  if (credentialIdByClientId.has(defaultClientId)) {
-    return;
-  }
-
-  const id = "cred_default";
-  const record: CredentialRecord = {
-    id,
-    tenantId: DEFAULT_TENANT_ID,
-    clientId: defaultClientId,
-    clientSecret: defaultClientSecret,
-    label: "Default sandbox credential",
-    createdAt: nowIso(),
-    status: "active",
-  };
-
-  credentialsById.set(id, record);
-  credentialIdByClientId.set(defaultClientId, id);
-  persistCredential(record);
-}
-
-ensureDefaultDeveloper();
 
 export function getDefaultTenantId(): string {
   return DEFAULT_TENANT_ID;

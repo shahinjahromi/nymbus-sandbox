@@ -56,7 +56,7 @@ transfersRouter.get("/transfers/:id(trf_[A-Za-z0-9_]+)", (req: Request, res: Res
   res.json(transfer);
 });
 
-transfersRouter.post("/transfers", (req: Request, res: Response) => {
+transfersRouter.post("/transfers", async (req: Request, res: Response) => {
   const body = req.body as {
     type?: "ach" | "wire" | "internal" | "instant";
     amount?: number;
@@ -91,7 +91,7 @@ transfersRouter.post("/transfers", (req: Request, res: Response) => {
   }
 
   if (idempotencyKey.length > 0) {
-    const replay = getIdempotentReplay<Transfer>({
+    const replay = await getIdempotentReplay<Transfer>({
       tenantId: req.tenantId!,
       method: req.method,
       route: "/transfers",

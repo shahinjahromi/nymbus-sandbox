@@ -22,6 +22,7 @@ export const config = {
     ),
   },
   persistence: {
+    dbType: (process.env.DB_TYPE ?? "sqlite") as "sqlite" | "mssql",
     sqlitePath:
       process.env.SANDBOX_SQLITE_PATH ??
       (nodeEnv === "test"
@@ -31,5 +32,11 @@ export const config = {
       process.env.SANDBOX_SQLITE_RESET_ON_BOOT !== undefined
         ? process.env.SANDBOX_SQLITE_RESET_ON_BOOT === "true"
         : nodeEnv === "test",
+    mssql: {
+      server: process.env.AZURE_SQL_SERVER ?? "",
+      database: process.env.AZURE_SQL_DATABASE ?? "",
+      user: process.env.AZURE_SQL_USER ?? "",
+      password: process.env.AZURE_SQL_PASSWORD ?? "",
+    },
   },
 } as const;

@@ -26,8 +26,8 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use((_, res, next) => {
   res.once("finish", () => {
-    flushTenantStore();
-    flushFallbackRuntimeStore();
+    flushTenantStore().catch((err) => console.error("[flush] tenant store:", err));
+    flushFallbackRuntimeStore().catch((err) => console.error("[flush] fallback store:", err));
   });
   next();
 });

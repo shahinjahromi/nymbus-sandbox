@@ -21,8 +21,8 @@ function generateRequestId(): string {
   return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function persistActivity(entry: ApiActivityEntry): void {
-  durableStore.insertApiActivity({
+async function persistActivity(entry: ApiActivityEntry): Promise<void> {
+  await durableStore.insertApiActivity({
     id: entry.id,
     tenant_id: entry.tenantId,
     client_id: entry.clientId,
@@ -38,18 +38,18 @@ function persistActivity(entry: ApiActivityEntry): void {
     duration_ms: entry.durationMs ?? null,
   });
   // Keep at most 1000 entries per tenant
-  durableStore.pruneApiActivity(entry.tenantId, 1000);
+  await durableStore.pruneApiActivity(entry.tenantId, 1000);
 }
 
-export function listApiActivityForTenant(params: {
+export async function listApiActivityForTenant(params: {
   tenantId: string;
   environment?: "sandbox";
   method?: string;
   pathContains?: string;
   statusCode?: number;
   limit?: number;
-}): ApiActivityEntry[] {
-  const rows = durableStore.listApiActivity({
+}): Promise<ApiActivityEntry[]> {
+  const rows = await durableStore.listApiActivity({
     tenantId: params.tenantId,
     environment: params.environment,
     method: params.method,
@@ -113,7 +113,9 @@ export function captureApiActivity(req: Request, res: Response, next: NextFuncti
       durationMs: Date.now() - startMs,
     };
 
-    persistActivity(entry);
+    persistActivity(entry).catch((err) =>
+      console.error("[api-activity-log] persist failed:", err),
+    );
   });
 
   next();
