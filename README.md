@@ -83,12 +83,13 @@ curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/jso
 ### 4. API spec
 
 - **OpenAPI (YAML):** `GET /docs` returns the sandbox API spec.
+- **Versioned API support:** implemented core resources are available on unversioned paths and versioned prefixes (`/v1.0` to `/v1.5`) for parity progression with bundled Nymbus contracts.
 - **Portal UI:** `GET /portal` serves the sandbox developer portal client.
 - **Portal API:**
   - Auth/session: `POST /portal-api/register`, `POST /portal-api/login`, `POST /portal-api/password-reset/*`, `GET /portal-api/me`
   - Credentials: `GET/POST /portal-api/credentials`, `POST /portal-api/credentials/:id/rotate`, `POST /portal-api/credentials/:id/revoke`
-  - Tenant operations: `GET /portal-api/users`, `GET /portal-api/accounts`, `GET /portal-api/accounts/:id`, `GET /portal-api/accounts/:id/transactions`, `POST /portal-api/accounts/:id/seed`, `POST /portal-api/accounts/:id/reset`
-  - Simulations: `POST /portal-api/simulations/ach-incoming`, `POST /portal-api/simulations/wire-incoming`, `POST /portal-api/simulations/card`
+  - Tenant operations: `GET/POST /portal-api/users`, `GET/POST /portal-api/accounts`, `GET /portal-api/accounts/:id`, `GET /portal-api/accounts/:id/transactions`, `POST /portal-api/accounts/:id/seed`, `POST /portal-api/accounts/:id/reset`, `POST /portal-api/tenant/reset`, `POST /portal-api/tenant/seed`
+  - Simulations: `POST /portal-api/simulations/ach-incoming`, `POST /portal-api/simulations/ach-outgoing`, `POST /portal-api/simulations/wire-incoming`, `POST /portal-api/simulations/card`
   - Interest/yield: `GET/POST /portal-api/accounts/:id/yield-config`, `POST /portal-api/interest/accrue-daily`
   - Observability: `GET /portal-api/api-activity`, `GET /portal-api/audit`
 - **Root:** `GET /` returns a short summary with token URL and endpoint list.

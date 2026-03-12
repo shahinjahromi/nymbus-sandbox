@@ -17,15 +17,20 @@ import { listApiActivityForTenant } from "../services/api-activity-log.js";
 import { listTenantAuditEntries, writeAuditEntry } from "../services/audit-log.js";
 import {
   accrueDailyInterest,
+  createTenantAccount,
+  createTenantCustomer,
   getTenantAccountById,
   getYieldConfig,
   listTenantAccounts,
   listTenantCustomers,
   listTenantTransactionsByAccountId,
+  resetTenantDataset,
   resetTenantAccountData,
+  seedTenantDataset,
   seedTenantAccountData,
   simulateCardNetworkEvent,
   simulateIncomingRailTransfer,
+  simulateOutgoingAchTransfer,
   upsertYieldConfig,
 } from "../services/tenant-store.js";
 
@@ -252,11 +257,131 @@ portalRouter.get("/portal-api/users", requirePortalSession, (req: Request, res: 
   });
 });
 
+portalRouter.post("/portal-api/users", requirePortalSession, (req: Request, res: Response) => {
+  const {
+    first_name: firstName,
+    last_name: lastName,
+    email,
+    external_id: externalId,
+  } = req.body ?? {};
+
+  if (!firstName || !lastName || !email) {
+    res.status(400).json({
+      code: "BAD_REQUEST",
+      message: "first_name, last_name, and email are required",
+    });
+    return;
+  }
+
+  const user = createTenantCustomer({
+    tenantId: req.portalTenantId!,
+    firstName,
+    lastName,
+    email,
+    externalId,
+  });
+
+  if (!user) {
+    res.status(409).json({ code: "CONFLICT", message: "User email already exists" });
+    return;
+  }
+
+  writeAuditEntry({
+    tenantId: req.portalTenantId!,
+    actor: req.portalUserEmail!,
+    action: "user.create",
+    outcome: "success",
+    details: { userId: user.id },
+  });
+
+  res.status(201).json({ user, environment: "sandbox" });
+});
+
 portalRouter.get("/portal-api/accounts", requirePortalSession, (req: Request, res: Response) => {
   res.json({
     data: listTenantAccounts(req.portalTenantId!),
     environment: "sandbox",
   });
+});
+
+portalRouter.post("/portal-api/accounts", requirePortalSession, (req: Request, res: Response) => {
+  const {
+    customer_id: customerId,
+    type,
+    currency,
+    initial_balance: initialBalance,
+  } = req.body ?? {};
+
+  if (!customerId || !type) {
+    res.status(400).json({ code: "BAD_REQUEST", message: "customer_id and type are required" });
+    return;
+  }
+
+  if (!["checking", "savings", "money_market"].includes(type)) {
+    res.status(400).json({
+      code: "BAD_REQUEST",
+      message: "type must be one of checking, savings, money_market",
+    });
+    return;
+  }
+
+  const parsedInitialBalance =
+    initialBalance === undefined ? 0 : typeof initialBalance === "number" ? initialBalance : Number(initialBalance);
+  if (!Number.isFinite(parsedInitialBalance) || parsedInitialBalance < 0) {
+    res.status(400).json({ code: "BAD_REQUEST", message: "initial_balance must be >= 0" });
+    return;
+  }
+
+  const account = createTenantAccount({
+    tenantId: req.portalTenantId!,
+    customerId,
+    type,
+    currency,
+    initialBalance: parsedInitialBalance,
+  });
+
+  if (!account) {
+    res.status(404).json({ code: "NOT_FOUND", message: "Customer not found" });
+    return;
+  }
+
+  writeAuditEntry({
+    tenantId: req.portalTenantId!,
+    actor: req.portalUserEmail!,
+    action: "account.create",
+    outcome: "success",
+    details: { accountId: account.id, customerId },
+  });
+
+  res.status(201).json({ account, environment: "sandbox" });
+});
+
+portalRouter.post("/portal-api/tenant/reset", requirePortalSession, (req: Request, res: Response) => {
+  const result = resetTenantDataset(req.portalTenantId!);
+
+  writeAuditEntry({
+    tenantId: req.portalTenantId!,
+    actor: req.portalUserEmail!,
+    action: "tenant.reset",
+    outcome: "success",
+    details: result,
+  });
+
+  res.json({ result, environment: "sandbox" });
+});
+
+portalRouter.post("/portal-api/tenant/seed", requirePortalSession, (req: Request, res: Response) => {
+  const result = seedTenantDataset(req.portalTenantId!);
+
+  writeAuditEntry({
+    tenantId: req.portalTenantId!,
+    actor: req.portalUserEmail!,
+    action: "tenant.seed",
+    outcome: "success",
+    details: result,
+  });
+
+  res.json({ result, environment: "sandbox" });
 });
 
 portalRouter.get("/portal-api/accounts/:id", requirePortalSession, (req: Request, res: Response) => {
@@ -421,6 +546,59 @@ portalRouter.post(
   }
 );
 
+portalRouter.post(
+  "/portal-api/simulations/ach-outgoing",
+  requirePortalSession,
+  (req: Request, res: Response) => {
+    const {
+      account_id: accountId,
+      amount,
+      routing_number: routingNumber,
+      account_number: accountNumber,
+      recipient_name: recipientName,
+      description,
+    } = req.body ?? {};
+    const parsedAmount = typeof amount === "number" ? amount : Number(amount);
+
+    if (!accountId || !parsedAmount || parsedAmount <= 0 || !routingNumber || !accountNumber) {
+      res.status(400).json({
+        code: "BAD_REQUEST",
+        message:
+          "account_id, routing_number, account_number, and positive amount are required",
+      });
+      return;
+    }
+
+    const simulated = simulateOutgoingAchTransfer({
+      tenantId: req.portalTenantId!,
+      accountId,
+      amount: parsedAmount,
+      routingNumber,
+      accountNumber,
+      recipientName,
+      description,
+    });
+
+    if (!simulated) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    writeAuditEntry({
+      tenantId: req.portalTenantId!,
+      actor: req.portalUserEmail!,
+      action: "simulation.ach_outgoing",
+      outcome: "success",
+      details: { accountId, amount: parsedAmount },
+    });
+
+    res.status(201).json({
+      ...simulated,
+      environment: "sandbox",
+    });
+  }
+);
+
 portalRouter.post("/portal-api/simulations/card", requirePortalSession, (req: Request, res: Response) => {
   const {
     account_id: accountId,
@@ -446,6 +624,12 @@ portalRouter.post("/portal-api/simulations/card", requirePortalSession, (req: Re
     return;
   }
 
+  const account = getTenantAccountById(req.portalTenantId!, accountId);
+  if (!account) {
+    res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+    return;
+  }
+
   const simulated = simulateCardNetworkEvent({
     tenantId: req.portalTenantId!,
     accountId,
@@ -456,12 +640,16 @@ portalRouter.post("/portal-api/simulations/card", requirePortalSession, (req: Re
   });
 
   if (!simulated) {
-    res.status(404).json({
-      code: "NOT_FOUND",
-      message:
-        normalizedEventType === "void"
-          ? "Matching authorization not found for void operation"
-          : "Account not found",
+    const messageByEventType: Record<string, string> = {
+      void: "Matching pending authorization hold not found for void operation",
+      refund: "Matching posted card transaction not found for refund operation",
+      post: "Matching pending authorization hold not found for post operation",
+      authorization: "Invalid card authorization request",
+    };
+
+    res.status(409).json({
+      code: "INVALID_STATE_TRANSITION",
+      message: messageByEventType[normalizedEventType],
     });
     return;
   }

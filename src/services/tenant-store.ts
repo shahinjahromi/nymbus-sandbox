@@ -83,9 +83,86 @@ export function listTenantCustomers(tenantId: string): Customer[] {
   return [...dataset.customers];
 }
 
+export function createTenantCustomer(params: {
+  tenantId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  externalId?: string;
+}): Customer | null {
+  const dataset = ensureTenantDataset(params.tenantId);
+  const normalizedEmail = params.email.trim().toLowerCase();
+
+  const duplicate = dataset.customers.some(
+    (customer) => customer.email.trim().toLowerCase() === normalizedEmail
+  );
+  if (duplicate) {
+    return null;
+  }
+
+  const customer: Customer = {
+    id: `cust_tenant_${uuidv4().slice(0, 8)}`,
+    externalId: params.externalId,
+    firstName: params.firstName,
+    lastName: params.lastName,
+    email: normalizedEmail,
+    status: "active",
+    createdAt: nowIso(),
+    kycStatus: "pending",
+  };
+
+  dataset.customers.push(customer);
+  return customer;
+}
+
 export function getTenantCustomerById(tenantId: string, customerId: string): Customer | undefined {
   const dataset = ensureTenantDataset(tenantId);
   return dataset.customers.find((customer) => customer.id === customerId);
+}
+
+export function createTenantAccount(params: {
+  tenantId: string;
+  customerId: string;
+  type: "checking" | "savings" | "money_market";
+  currency?: string;
+  initialBalance?: number;
+}): Account | null {
+  const dataset = ensureTenantDataset(params.tenantId);
+  const customerExists = dataset.customers.some((customer) => customer.id === params.customerId);
+  if (!customerExists) {
+    return null;
+  }
+
+  const openingBalance = roundMoney(Math.max(0, params.initialBalance ?? 0));
+  const account: Account = {
+    id: `acct_tenant_${uuidv4().slice(0, 8)}`,
+    customerId: params.customerId,
+    type: params.type,
+    status: "active",
+    currency: params.currency ?? "USD",
+    balance: openingBalance,
+    availableBalance: openingBalance,
+    lastFour: uuidv4().replace(/-/g, "").slice(0, 4),
+    openedAt: nowIso(),
+  };
+
+  dataset.accounts.push(account);
+
+  if (openingBalance > 0) {
+    dataset.transactions.push({
+      id: `txn_sand_${uuidv4().slice(0, 8)}`,
+      accountId: account.id,
+      type: "credit",
+      amount: openingBalance,
+      currency: account.currency,
+      status: "posted",
+      description: "Opening balance",
+      postedAt: nowIso(),
+      referenceId: `opening_${account.id}`,
+    });
+  }
+
+  return account;
 }
 
 export function listTenantTransactionsByAccountId(
@@ -314,6 +391,46 @@ export function resetTenantAccountData(tenantId: string, accountId: string): Acc
   return account;
 }
 
+export function resetTenantDataset(tenantId: string): {
+  customersCleared: number;
+  accountsCleared: number;
+  transactionsCleared: number;
+  transfersCleared: number;
+} {
+  const dataset = ensureTenantDataset(tenantId);
+  const result = {
+    customersCleared: dataset.customers.length,
+    accountsCleared: dataset.accounts.length,
+    transactionsCleared: dataset.transactions.length,
+    transfersCleared: dataset.transfers.length,
+  };
+
+  dataset.customers = [];
+  dataset.accounts = [];
+  dataset.transactions = [];
+  dataset.transfers = [];
+  dataset.yieldConfigs.clear();
+
+  return result;
+}
+
+export function seedTenantDataset(tenantId: string): {
+  customersSeeded: number;
+  accountsSeeded: number;
+  transactionsSeeded: number;
+  transfersSeeded: number;
+} {
+  const seeded = cloneDataset();
+  datasets.set(tenantId, seeded);
+
+  return {
+    customersSeeded: seeded.customers.length,
+    accountsSeeded: seeded.accounts.length,
+    transactionsSeeded: seeded.transactions.length,
+    transfersSeeded: seeded.transfers.length,
+  };
+}
+
 export function simulateIncomingRailTransfer(params: {
   tenantId: string;
   accountId: string;
@@ -368,6 +485,65 @@ export function simulateIncomingRailTransfer(params: {
   return { transfer, transaction };
 }
 
+export function simulateOutgoingAchTransfer(params: {
+  tenantId: string;
+  accountId: string;
+  amount: number;
+  routingNumber: string;
+  accountNumber: string;
+  recipientName?: string;
+  description?: string;
+}): { transfer: Transfer; transaction: Transaction } | null {
+  const dataset = ensureTenantDataset(params.tenantId);
+  const account = dataset.accounts.find((item) => item.id === params.accountId);
+  if (!account) {
+    return null;
+  }
+
+  const now = nowIso();
+  const transferId = `trf_sand_${uuidv4().slice(0, 8)}`;
+  const referenceId = `ref_${transferId}`;
+
+  const transfer: Transfer = {
+    id: transferId,
+    type: "ach",
+    status: "completed",
+    amount: params.amount,
+    currency: "USD",
+    fromAccountId: params.accountId,
+    toExternal: {
+      routingNumber: params.routingNumber,
+      accountNumber: params.accountNumber,
+      name: params.recipientName,
+    },
+    description: params.description ?? "Outgoing ACH transfer",
+    createdAt: now,
+    completedAt: now,
+    referenceId,
+  };
+
+  const transaction: Transaction = {
+    id: `txn_sand_${uuidv4().slice(0, 8)}`,
+    accountId: params.accountId,
+    type: "debit",
+    amount: -Math.abs(params.amount),
+    currency: "USD",
+    status: "posted",
+    description: transfer.description ?? "Outgoing ACH transfer",
+    counterparty: params.recipientName,
+    postedAt: now,
+    referenceId,
+  };
+
+  dataset.transfers.push(transfer);
+  dataset.transactions.push(transaction);
+
+  account.balance = roundMoney(account.balance - Math.abs(params.amount));
+  account.availableBalance = roundMoney(account.availableBalance - Math.abs(params.amount));
+
+  return { transfer, transaction };
+}
+
 export function simulateCardNetworkEvent(params: {
   tenantId: string;
   accountId: string;
@@ -405,7 +581,13 @@ export function simulateCardNetworkEvent(params: {
     const related = dataset.transactions
       .slice()
       .reverse()
-      .find((transaction) => transaction.referenceId === baseReferenceId && transaction.type === "hold");
+      .find(
+        (transaction) =>
+          transaction.accountId === params.accountId &&
+          transaction.referenceId === baseReferenceId &&
+          transaction.type === "hold" &&
+          transaction.status === "pending"
+      );
     if (!related) {
       return null;
     }
@@ -429,11 +611,25 @@ export function simulateCardNetworkEvent(params: {
   }
 
   if (params.eventType === "refund") {
+    const eligiblePost = dataset.transactions
+      .slice()
+      .reverse()
+      .find(
+        (transaction) =>
+          transaction.accountId === params.accountId &&
+          transaction.referenceId === baseReferenceId &&
+          transaction.type === "debit" &&
+          transaction.status === "posted"
+      );
+    if (!eligiblePost) {
+      return null;
+    }
+
     const refund: Transaction = {
       id: `txn_sand_${uuidv4().slice(0, 8)}`,
       accountId: params.accountId,
       type: "credit",
-      amount: Math.abs(params.amount),
+      amount: Math.min(Math.abs(params.amount), Math.abs(eligiblePost.amount)),
       currency: "USD",
       status: "posted",
       description: params.description ?? "Card refund",
@@ -442,9 +638,28 @@ export function simulateCardNetworkEvent(params: {
     };
 
     dataset.transactions.push(refund);
-    account.balance = roundMoney(account.balance + Math.abs(params.amount));
-    account.availableBalance = roundMoney(account.availableBalance + Math.abs(params.amount));
-    return { transaction: refund };
+    account.balance = roundMoney(account.balance + refund.amount);
+    account.availableBalance = roundMoney(account.availableBalance + refund.amount);
+    return { transaction: refund, relatedTransaction: eligiblePost };
+  }
+
+  if (params.referenceId) {
+    const eligibleHold = dataset.transactions
+      .slice()
+      .reverse()
+      .find(
+        (transaction) =>
+          transaction.accountId === params.accountId &&
+          transaction.referenceId === baseReferenceId &&
+          transaction.type === "hold" &&
+          transaction.status === "pending"
+      );
+
+    if (!eligibleHold) {
+      return null;
+    }
+
+    eligibleHold.status = "reversed";
   }
 
   const postTxn: Transaction = {

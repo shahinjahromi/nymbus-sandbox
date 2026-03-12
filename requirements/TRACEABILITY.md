@@ -222,4 +222,37 @@ Format per entry:
 
 ---
 
+### 12. REQ-F-002/003/004 tenant lifecycle and simulation parity slice
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-002, REQ-F-003, REQ-F-004
+- **Requirement title:** Tenant isolation operations, tenant dataset seed/reset lifecycle, and expanded rail/card simulation behaviors
+- **Files changed:**
+  - `src/services/tenant-store.ts` (added tenant user/account creation, tenant-level reset/seed, outgoing ACH simulation, stricter card transition validity checks)
+  - `src/routes/portal.ts` (added `POST /portal-api/users`, `POST /portal-api/accounts`, `POST /portal-api/tenant/reset`, `POST /portal-api/tenant/seed`, `POST /portal-api/simulations/ach-outgoing`, plus improved card transition error responses)
+  - `tests/req-f-002-tenant-isolation.test.ts` (new)
+  - `tests/req-f-003-seeding-reset.test.ts` (new)
+  - `tests/req-f-004-rails-card-simulation.test.ts` (new)
+  - `README.md` (expanded portal endpoint documentation)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Implemented missing runtime controls to satisfy remaining tenant and lifecycle requirements: developers can now create tenant-scoped users/accounts, perform tenant-wide dataset reset and deterministic reseed, simulate outgoing ACH flows, and receive lifecycle-valid card transition handling for auth/post/void/refund operations. Added dedicated runtime tests for REQ-F-002/003/004 and validated targeted pass.
+
+---
+
+### 13. REQ-F-005 contract parity tranche: versioned routing + baseline coverage tests
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-005
+- **Requirement title:** Full Core contract parity (incremental slice: versioned path support and local-runtime validation)
+- **Files changed:**
+  - `src/app.ts` (mounted core routers under `/v1.0` through `/v1.5` and exposed supported versions at root)
+  - `tests/req-f-005-openapi-endpoint-coverage.test.ts` (new)
+  - `tests/req-f-005-contract-model-parity.test.ts` (new)
+  - `tests/req-f-005-stoplight-independence.test.ts` (new)
+  - `README.md` (documented versioned API support)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Implemented a concrete REQ-F-005 progression slice by enabling versioned route access for implemented core resources and adding baseline tests for versioned endpoint routability, representative contract model shape checks, and local runtime persistence/idempotency behavior independent of Stoplight runtime.
+
+---
+
 *(Add new entries at the bottom when implementing further requirements.)*

@@ -14,6 +14,7 @@ import { portalRouter } from "./routes/portal.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export const app = express();
+const coreApiVersions = ["/v1.0", "/v1.1", "/v1.2", "/v1.3", "/v1.4", "/v1.5"] as const;
 
 app.use(cors());
 app.use(express.json());
@@ -57,11 +58,21 @@ app.get("/", (_req, res) => {
       transfers: "/transfers",
       portalApi: "/portal-api",
     },
+    api_versions: [...coreApiVersions],
   });
 });
 
 app.use(authRouter);
 app.use(portalRouter);
+
+for (const versionPrefix of coreApiVersions) {
+  app.use(versionPrefix, authRouter);
+  app.use(versionPrefix, accountsRouter);
+  app.use(versionPrefix, transactionsRouter);
+  app.use(versionPrefix, customersRouter);
+  app.use(versionPrefix, transfersRouter);
+}
+
 app.use(accountsRouter);
 app.use(transactionsRouter);
 app.use(customersRouter);
