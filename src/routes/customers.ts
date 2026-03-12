@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../auth/middleware.js";
+import { enforceApiRateLimit } from "../auth/rate-limit.js";
 import { captureApiActivity } from "../services/api-activity-log.js";
 import { getTenantCustomerById, listTenantCustomers } from "../services/tenant-store.js";
 import type { PaginatedResponse } from "../types/index.js";
@@ -7,6 +8,7 @@ import type { Customer } from "../types/index.js";
 
 export const customersRouter = Router();
 customersRouter.use(requireAuth);
+customersRouter.use(enforceApiRateLimit);
 customersRouter.use(captureApiActivity);
 
 customersRouter.get("/customers", (_req: Request, res: Response) => {
@@ -27,7 +29,7 @@ customersRouter.get("/customers", (_req: Request, res: Response) => {
   res.json(response);
 });
 
-customersRouter.get("/customers/:id", (req: Request, res: Response) => {
+customersRouter.get("/customers/:id(cust_[A-Za-z0-9_]+)", (req: Request, res: Response) => {
   const customer = getTenantCustomerById(req.tenantId!, req.params.id);
   if (!customer) {
     res.status(404).json({

@@ -10,6 +10,7 @@ import { transactionsRouter } from "./routes/transactions.js";
 import { customersRouter } from "./routes/customers.js";
 import { transfersRouter } from "./routes/transfers.js";
 import { portalRouter } from "./routes/portal.js";
+import { openApiFallbackRouter } from "./routes/openapi-fallback.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -77,3 +78,4 @@ app.use(accountsRouter);
 app.use(transactionsRouter);
 app.use(customersRouter);
 app.use(transfersRouter);
+app.use(openApiFallbackRouter);

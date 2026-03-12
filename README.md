@@ -6,6 +6,7 @@ A **sandbox environment** for the Nymbus processor so integrators can create dev
 
 - **Developer accounts & OAuth 2.0** — Integrators get `client_id` and `client_secret`; they use the **client_credentials** grant to obtain an access token for the sandbox API.
 - **Developer portal (MVP)** — Built-in sandbox portal at `/portal` for developer registration/login, OTP password reset, credential lifecycle actions (create/list/rotate/revoke), and sandbox activity/audit visibility.
+- **Security guardrails** — Configurable in-memory throttling for OAuth, authenticated API operations, and portal auth/reset endpoints with `429` + `Retry-After` enforcement on abuse patterns.
 - **Full API surface** — Same endpoints and response shapes as production: accounts, transactions, customers, transfers (ACH, wire, internal, instant).
 - **Deterministic mock data** — Realistic but fake data so integrators can assert on balances, statuses, and pagination without touching real cores.
 - **Pre-production validation** — Build and test integrations end-to-end, then switch the base URL and credentials to production when ready.
@@ -84,6 +85,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/jso
 
 - **OpenAPI (YAML):** `GET /docs` returns the sandbox API spec.
 - **Versioned API support:** implemented core resources are available on unversioned paths and versioned prefixes (`/v1.0` to `/v1.5`) for parity progression with bundled Nymbus contracts.
+- **Contract fallback coverage:** bundled OpenAPI path/method pairs that are not yet specialized are still routed by local sandbox handlers and return a contract-stub marker header `x-sandbox-contract-stub: true`.
 - **Portal UI:** `GET /portal` serves the sandbox developer portal client.
 - **Portal API:**
   - Auth/session: `POST /portal-api/register`, `POST /portal-api/login`, `POST /portal-api/password-reset/*`, `GET /portal-api/me`

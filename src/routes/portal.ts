@@ -33,6 +33,7 @@ import {
   simulateOutgoingAchTransfer,
   upsertYieldConfig,
 } from "../services/tenant-store.js";
+import { checkPortalAuthRateLimit } from "../services/security-rate-limit.js";
 
 export const portalRouter = Router();
 
@@ -87,6 +88,16 @@ portalRouter.post("/portal-api/login", (req: Request, res: Response) => {
     return;
   }
 
+  const rateLimitResult = checkPortalAuthRateLimit(String(email));
+  if (!rateLimitResult.allowed) {
+    res.setHeader("Retry-After", String(rateLimitResult.retryAfterSeconds ?? 60));
+    res.status(429).json({
+      code: "RATE_LIMITED",
+      message: "Too many portal authentication attempts. Retry later.",
+    });
+    return;
+  }
+
   try {
     const session = authenticatePortalUser({ email, password });
     writeAuditEntry({
@@ -125,6 +136,16 @@ portalRouter.post("/portal-api/password-reset/request", (req: Request, res: Resp
     return;
   }
 
+  const rateLimitResult = checkPortalAuthRateLimit(`reset-request:${String(email)}`);
+  if (!rateLimitResult.allowed) {
+    res.setHeader("Retry-After", String(rateLimitResult.retryAfterSeconds ?? 60));
+    res.status(429).json({
+      code: "RATE_LIMITED",
+      message: "Too many OTP reset requests. Retry later.",
+    });
+    return;
+  }
+
   const response = issueResetOtp(email);
   res.json({
     ...response,
@@ -138,6 +159,16 @@ portalRouter.post("/portal-api/password-reset/confirm", (req: Request, res: Resp
     res.status(400).json({
       code: "BAD_REQUEST",
       message: "email, otp, and new_password are required",
+    });
+    return;
+  }
+
+  const rateLimitResult = checkPortalAuthRateLimit(`reset-confirm:${String(email)}`);
+  if (!rateLimitResult.allowed) {
+    res.setHeader("Retry-After", String(rateLimitResult.retryAfterSeconds ?? 60));
+    res.status(429).json({
+      code: "RATE_LIMITED",
+      message: "Too many OTP confirmation attempts. Retry later.",
     });
     return;
   }

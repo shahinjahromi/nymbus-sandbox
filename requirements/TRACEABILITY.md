@@ -255,4 +255,49 @@ Format per entry:
 
 ---
 
+### 14. REQ-F-005 contract parity tranche: bundled OpenAPI-wide routability fallback
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-005
+- **Requirement title:** Full Core contract parity (incremental slice: route all bundled path/method pairs via local fallback handlers)
+- **Files changed:**
+  - `package.json` (added `yaml` dependency for OpenAPI parsing)
+  - `src/routes/openapi-fallback.ts` (new; loads bundled OpenAPI and registers fallback handlers for all defined path/method pairs)
+  - `src/app.ts` (mounted contract fallback router after implemented routes)
+  - `src/routes/accounts.ts` (constrained account-id route matching)
+  - `src/routes/customers.ts` (constrained customer-id route matching)
+  - `src/routes/transactions.ts` (constrained transaction-id route matching)
+  - `src/routes/transfers.ts` (constrained transfer-id route matching)
+  - `tests/req-f-005-openapi-endpoint-coverage.test.ts` (upgraded to iterate all bundled path/method pairs and assert non-404/405 routability)
+  - `README.md` (documented contract fallback marker header)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Implemented a contract-driven fallback router so every bundled OpenAPI endpoint surface is locally routed even before endpoint-specific simulator behavior is built. Added exhaustive path/method coverage testing against the bundled contract and adjusted ID route constraints so fallback handlers can serve contract subpaths cleanly.
+
+---
+
+### 15. REQ-NF-005 runtime security tranche: configurable throttling and audit assertions
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-NF-005
+- **Requirement title:** Sandbox abuse controls and auditability enforced at runtime
+- **Files changed:**
+  - `src/config.ts` (added configurable security throttle settings)
+  - `src/services/security-rate-limit.ts` (new in-memory limiter for OAuth, API, and portal auth scopes)
+  - `src/auth/rate-limit.ts` (new API rate-limit middleware)
+  - `src/routes/auth.ts` (OAuth token throttling)
+  - `src/routes/accounts.ts` (API throttling middleware)
+  - `src/routes/customers.ts` (API throttling middleware)
+  - `src/routes/transactions.ts` (API throttling middleware)
+  - `src/routes/transfers.ts` (API throttling middleware)
+  - `src/routes/openapi-fallback.ts` (fallback API throttling)
+  - `src/routes/portal.ts` (portal login and OTP reset throttling)
+  - `tests/req-nf-005-rate-limit-controls.test.ts` (new runtime throttle behavior test)
+  - `tests/req-nf-005-audit-trail.test.ts` (new runtime audit assertions)
+  - `tests/req-nf-005-sensitive-data-masking.test.ts` (new runtime sensitive-data persistence checks)
+  - `README.md` (security guardrails documentation)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Added configurable runtime abuse controls and explicit tests proving OAuth/API/portal throttling, security-action audit capture, and absence of secrets/OTP values in stored audit entries. This advances NF-005 from document-only validation to executable guardrails.
+
+---
+
 *(Add new entries at the bottom when implementing further requirements.)*

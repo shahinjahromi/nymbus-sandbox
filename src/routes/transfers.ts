@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../auth/middleware.js";
+import { enforceApiRateLimit } from "../auth/rate-limit.js";
 import {
   createTenantTransfer,
   getTenantAccountById,
@@ -12,6 +13,7 @@ import { getIdempotentReplay, saveIdempotentResult } from "../services/idempoten
 
 export const transfersRouter = Router();
 transfersRouter.use(requireAuth);
+transfersRouter.use(enforceApiRateLimit);
 transfersRouter.use(captureApiActivity);
 
 transfersRouter.get("/transfers", (req: Request, res: Response) => {
@@ -41,7 +43,7 @@ transfersRouter.get("/transfers", (req: Request, res: Response) => {
   res.json(response);
 });
 
-transfersRouter.get("/transfers/:id", (req: Request, res: Response) => {
+transfersRouter.get("/transfers/:id(trf_[A-Za-z0-9_]+)", (req: Request, res: Response) => {
   const transfer = getTenantTransferById(req.tenantId!, req.params.id);
   if (!transfer) {
     res.status(404).json({

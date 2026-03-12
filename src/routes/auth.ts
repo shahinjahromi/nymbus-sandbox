@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { handleClientCredentialsGrant } from "../auth/oauth.js";
+import { checkOauthRateLimit, oauthClientKey } from "../services/security-rate-limit.js";
 
 export const authRouter = Router();
 
@@ -19,6 +20,16 @@ authRouter.post("/oauth/token", (req: Request, res: Response) => {
     clientId = req.body?.client_id;
     clientSecret = req.body?.client_secret;
     grantType = req.body?.grant_type;
+  }
+
+  const rateLimitResult = checkOauthRateLimit(oauthClientKey(req, clientId));
+  if (!rateLimitResult.allowed) {
+    res.setHeader("Retry-After", String(rateLimitResult.retryAfterSeconds ?? 60));
+    res.status(429).json({
+      error: "temporarily_unavailable",
+      error_description: "Rate limit exceeded for token requests. Retry later.",
+    });
+    return;
   }
 
   if (!clientId || !clientSecret) {

@@ -10,4 +10,12 @@ export const config = {
     defaultClientId: process.env.SANDBOX_DEFAULT_CLIENT_ID ?? "sandbox_dev_001",
     defaultClientSecret: process.env.SANDBOX_DEFAULT_CLIENT_SECRET ?? "sandbox_secret_change_in_production",
   },
+  security: {
+    oauthRequestsPerMinute: parseInt(process.env.SANDBOX_OAUTH_REQUESTS_PER_MINUTE ?? "120", 10),
+    apiRequestsPerMinute: parseInt(process.env.SANDBOX_API_REQUESTS_PER_MINUTE ?? "300", 10),
+    portalAuthRequestsPerMinute: parseInt(
+      process.env.SANDBOX_PORTAL_AUTH_REQUESTS_PER_MINUTE ?? "60",
+      10
+    ),
+  },
 } as const;

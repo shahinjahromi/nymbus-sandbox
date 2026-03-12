@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../auth/middleware.js";
+import { enforceApiRateLimit } from "../auth/rate-limit.js";
 import { captureApiActivity } from "../services/api-activity-log.js";
 import {
   getTenantTransactionById,
@@ -10,6 +11,7 @@ import type { Transaction } from "../types/index.js";
 
 export const transactionsRouter = Router();
 transactionsRouter.use(requireAuth);
+transactionsRouter.use(enforceApiRateLimit);
 transactionsRouter.use(captureApiActivity);
 
 transactionsRouter.get("/transactions", (req: Request, res: Response) => {
@@ -39,7 +41,7 @@ transactionsRouter.get("/transactions", (req: Request, res: Response) => {
   res.json(response);
 });
 
-transactionsRouter.get("/transactions/:id", (req: Request, res: Response) => {
+transactionsRouter.get("/transactions/:id(txn_[A-Za-z0-9_]+)", (req: Request, res: Response) => {
   const txn = getTenantTransactionById(req.tenantId!, req.params.id);
   if (!txn) {
     res.status(404).json({
