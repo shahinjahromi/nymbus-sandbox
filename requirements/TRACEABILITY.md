@@ -100,4 +100,76 @@ Format per entry:
 
 ---
 
+### 5. Backend functional scope expansion (REQ-F-002, REQ-F-003, REQ-F-004)
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-002, REQ-F-003, REQ-F-004
+- **Requirement title:** Developer tenancy isolation, tenant seed/reset lifecycle, payment rail and card simulation
+- **Files changed:**
+  - `requirements/functional/REQ-F-002-developer-tenant-isolation.md` (new)
+  - `requirements/functional/REQ-F-003-tenant-seeding-and-reset.md` (new)
+  - `requirements/functional/REQ-F-004-payment-rail-and-card-simulation.md` (new)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Logged backend functional requirements from user input: multi-tenant developer account isolation, deterministic tenant seed/wipe/reseed workflows, and simulation of ACH/wire/card lifecycle transactions, with future implementation expected to conform to Stoplight-hosted API specifications.
+
+---
+
+### 6. Full OpenAPI parity and independent core simulator backend (REQ-F-005)
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-005
+- **Requirement title:** Full Nymbus Core contract parity with independent simulator backend and owned DB
+- **Files changed:**
+  - `requirements/functional/REQ-F-005-full-core-contract-parity.md` (new)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Logged requirement that backend must implement all endpoints and contract models from imported Nymbus OpenAPI files, expose Stoplight-compatible paths independently of Stoplight runtime, and rely on project-owned backend code plus database design/persistence for simulator behavior.
+
+---
+
+### 7. Developer portal functional scope (REQ-F-006, REQ-F-007, REQ-F-008)
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-006, REQ-F-007, REQ-F-008
+- **Requirement title:** Portal auth/credentials, tenant operations visibility, simulation and interest accrual controls
+- **Files changed:**
+  - `requirements/functional/REQ-F-006-developer-portal-auth-and-credentials.md` (new)
+  - `requirements/functional/REQ-F-007-tenant-operations-observability.md` (new)
+  - `requirements/functional/REQ-F-008-simulation-and-interest-accrual-controls.md` (new)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Logged frontend portal requirements for developer registration/login/password reset OTP, API spec access, credential generation, tenant-scoped visibility of users/accounts/ledger/transactions, seed/reset operations, API call activity logs, external ACH/wire/card simulation actions, and account yield configuration with daily interest accrual behavior persisted by backend.
+
+---
+
+### 8. Nymbus-relevant portal gap closure (REQ-F-009, REQ-F-010, REQ-F-011, REQ-F-012, REQ-NF-005)
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-009, REQ-F-010, REQ-F-011, REQ-F-012, REQ-NF-005
+- **Requirement title:** Credential lifecycle controls, diagnostics/idempotency visibility, contract change visibility, environment scoping, security guardrails
+- **Files changed:**
+  - `requirements/functional/REQ-F-009-sandbox-credential-lifecycle-controls.md` (new)
+  - `requirements/functional/REQ-F-010-sandbox-api-diagnostics-and-idempotency-visibility.md` (new)
+  - `requirements/functional/REQ-F-011-openapi-contract-version-and-change-visibility.md` (new)
+  - `requirements/functional/REQ-F-012-environment-scoping-and-credential-separation.md` (new)
+  - `requirements/non-functional/REQ-NF-005-sandbox-security-rate-limits-and-auditability.md` (new)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Added portal/security requirements scoped to Nymbus contract relevance and current project scope. Explicitly excluded non-requested items (webhook management without documented contract support, production endpoint monitoring, SDK-related requirements, embedded “Try It” functionality, and multi-tenant organization facilities).
+
+---
+
+### 9. Requirement test pairing for new portal/security scope (REQ-F-009, REQ-F-010, REQ-F-011, REQ-F-012, REQ-NF-005)
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-009, REQ-F-010, REQ-F-011, REQ-F-012, REQ-NF-005
+- **Requirement title:** Tests added for credential lifecycle, diagnostics/idempotency, contract visibility, environment scoping, security guardrails
+- **Files changed:**
+  - `tests/req-f-009-credential-lifecycle-controls.test.ts` (new)
+  - `tests/req-f-010-sandbox-api-diagnostics-and-idempotency-visibility.test.ts` (new)
+  - `tests/req-f-011-openapi-contract-version-and-change-visibility.test.ts` (new)
+  - `tests/req-f-012-environment-scoping-and-credential-separation.test.ts` (new)
+  - `tests/req-nf-005-sandbox-security-rate-limits-and-auditability.test.ts` (new)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Added requirement-paired Vitest checks validating that new requirement documents exist and contain the expected scope constraints, including sandbox-only monitoring boundaries and exclusions for SDK/Try-It features.
+
+---
+
 *(Add new entries at the bottom when implementing further requirements.)*
