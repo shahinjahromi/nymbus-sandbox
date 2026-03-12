@@ -6,3 +6,6 @@ dist/
 .idea/
 .vscode/
 .data/
+portal/dist/
+portal/node_modules/
+portal/.angular/

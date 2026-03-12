@@ -6,6 +6,8 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc && npm run test",
+    "build:portal": "cd portal && npm install && npx ng build --configuration=production",
+    "build:all": "npm run build:portal && npm run build",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",

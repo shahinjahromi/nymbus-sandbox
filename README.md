@@ -5,7 +5,7 @@ A **sandbox environment** for the Nymbus processor so integrators can create dev
 ## What This Provides
 
 - **Developer accounts & OAuth 2.0** — Integrators get `client_id` and `client_secret`; they use the **client_credentials** grant to obtain an access token for the sandbox API.
-- **Developer portal (MVP)** — Built-in sandbox portal at `/portal` for developer registration/login, OTP password reset, credential lifecycle actions (create/list/rotate/revoke), and sandbox activity/audit visibility.
+- **Developer portal (Angular SPA)** — Full Angular 19 single-page application served at `/portal` with developer registration/login, OTP password reset, credential lifecycle management (create/list/rotate/revoke), customer/account creation and inspection, ACH/wire/card simulation controls, yield configuration, API activity logs, audit trail, and contract version/deprecation visibility.
 - **Security guardrails** — Configurable in-memory throttling for OAuth, authenticated API operations, and portal auth/reset endpoints with `429` + `Retry-After` enforcement on abuse patterns.
 - **Full API surface** — Same endpoints and response shapes as production: accounts, transactions, customers, transfers (ACH, wire, internal, instant).
 - **Deterministic mock data** — Realistic but fake data so integrators can assert on balances, statuses, and pagination without touching real cores.
@@ -118,8 +118,25 @@ Integrators should use the **same client code** for both environments and only s
 nymbus-sandbox/
 ├── openapi/
 │   └── sandbox-api.yaml    # API specification for sandbox
+├── portal/                 # Angular 19 developer portal SPA
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── guards/         # Route guards (auth)
+│   │   │   ├── interceptors/   # HTTP interceptors (auth token)
+│   │   │   ├── layout/         # Shell component (sidebar + header)
+│   │   │   ├── pages/          # Page components (dashboard, credentials, etc.)
+│   │   │   ├── services/       # AuthService, ApiService
+│   │   │   ├── app.config.ts
+│   │   │   ├── app.component.ts
+│   │   │   └── app.routes.ts
+│   │   ├── index.html
+│   │   └── styles.css          # CSS design system
+│   ├── angular.json
+│   ├── package.json
+│   └── proxy.conf.json         # Dev proxy for /portal-api
 ├── src/
 │   ├── index.ts            # Express app, routes, /health, /docs
+│   ├── app.ts              # Express app setup + portal static serving
 │   ├── config.ts           # Env-based config
 │   ├── auth/
 │   │   ├── oauth.ts        # Token issuance, client_credentials grant
@@ -129,7 +146,8 @@ nymbus-sandbox/
 │   │   ├── accounts.ts     # GET /accounts, /accounts/:id
 │   │   ├── transactions.ts # GET /transactions, /transactions/:id
 │   │   ├── customers.ts    # GET /customers, /customers/:id
-│   │   └── transfers.ts    # GET/POST /transfers, GET /transfers/:id
+│   │   ├── transfers.ts    # GET/POST /transfers, GET /transfers/:id
+│   │   └── portal.ts       # Portal API routes (/portal-api/*)
 │   ├── services/
 │   │   ├── developer-registry.ts  # In-memory OAuth client store
 │   │   └── mock-data.ts    # Production-like mock entities
@@ -143,8 +161,23 @@ nymbus-sandbox/
 ## Extending the sandbox
 
 - **More endpoints:** Add routes under `src/routes/` and mirror production request/response shapes; add mock data or behavior in `src/services/mock-data.ts`.
-- **Developer portal:** Replace the in-memory `developer-registry` with a database and a small portal (or admin API) that issues `client_id` / `client_secret` per developer.
+- **Portal development:** The Angular portal lives in `portal/`. Run `cd portal && ng serve --proxy-config proxy.conf.json` to develop locally with hot-reload (proxies `/portal-api` to Express at `localhost:3000`). Build for production with `npm run build:portal` from the project root.
 - **Hosted deployment:** Set `SANDBOX_BASE_URL` to the public sandbox URL; run behind HTTPS and rate limiting in production.
+
+## Building
+
+```bash
+# Backend only (TypeScript compile + tests)
+npm run build
+
+# Portal only (Angular production build)
+npm run build:portal
+
+# Full build (portal + backend + tests)
+npm run build:all
+```
+
+The production Angular build is output to `portal/dist/browser/` and served automatically by Express at `/portal`.
 
 ## License
 

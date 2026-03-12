@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { config } from "./config.js";
@@ -15,6 +15,7 @@ import { flushTenantStore } from "./services/tenant-store.js";
 import { flushFallbackRuntimeStore } from "./routes/openapi-fallback.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const portalDistPath = join(__dirname, "..", "portal", "dist", "browser");
 
 export const app = express();
 const coreApiVersions = ["/v1.0", "/v1.1", "/v1.2", "/v1.3", "/v1.4", "/v1.5"] as const;
@@ -75,6 +76,15 @@ app.get("/", (_req, res) => {
 
 app.use(authRouter);
 app.use(portalRouter);
+
+/* ── Angular portal frontend (built static assets) ── */
+if (existsSync(portalDistPath)) {
+  app.use("/portal", express.static(portalDistPath, { index: "index.html" }));
+  // SPA fallback: serve index.html for any unmatched /portal/* route
+  app.use("/portal", (_req, res) => {
+    res.sendFile(join(portalDistPath, "index.html"));
+  });
+}
 
 for (const versionPrefix of coreApiVersions) {
   app.use(versionPrefix, authRouter);

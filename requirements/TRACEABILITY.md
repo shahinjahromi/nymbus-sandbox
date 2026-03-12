@@ -411,4 +411,42 @@ Format per entry:
 
 ---
 
+---
+
+### 22. REQ-F-006 Angular developer portal frontend
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-006
+- **Requirement title:** Developer portal front-end implemented as Angular 19 SPA
+- **Files changed:**
+  - `portal/` (new Angular 19 project scaffolded with `@angular/cli@19`)
+  - `portal/src/app/services/auth.service.ts` (new; JWT session management with BehaviorSubject, localStorage persistence)
+  - `portal/src/app/services/api.service.ts` (new; HTTP client wrapping all 30+ `/portal-api/*` endpoints)
+  - `portal/src/app/interceptors/auth.interceptor.ts` (new; HttpInterceptorFn attaching Bearer token, 401 redirect)
+  - `portal/src/app/guards/auth.guard.ts` (new; CanActivateFn for protected routes)
+  - `portal/src/app/layout/shell.component.ts` (new; sidebar navigation, header, toast notifications, tenant seed/reset)
+  - `portal/src/app/pages/login/login.component.ts` (new; email/password auth form)
+  - `portal/src/app/pages/register/register.component.ts` (new; registration with auto-login)
+  - `portal/src/app/pages/reset-password/reset-password.component.ts` (new; two-step OTP flow)
+  - `portal/src/app/pages/dashboard/dashboard.component.ts` (new; stats grid, profile, recent activity)
+  - `portal/src/app/pages/credentials/credentials.component.ts` (new; create/list/rotate/revoke credentials)
+  - `portal/src/app/pages/customers/customers.component.ts` (new; create + list customers)
+  - `portal/src/app/pages/accounts/accounts.component.ts` (new; create + list accounts)
+  - `portal/src/app/pages/account-detail/account-detail.component.ts` (new; account info, yield config, transactions)
+  - `portal/src/app/pages/simulations/simulations.component.ts` (new; ACH/wire/card simulation controls)
+  - `portal/src/app/pages/activity/activity.component.ts` (new; API activity log with filters)
+  - `portal/src/app/pages/audit/audit.component.ts` (new; audit trail viewer)
+  - `portal/src/app/pages/contract/contract.component.ts` (new; contract metadata, deprecations, changelog)
+  - `portal/src/app/app.routes.ts` (new; lazy-loaded routing with auth guard)
+  - `portal/src/app/app.config.ts` (updated; provideHttpClient with auth interceptor)
+  - `portal/src/styles.css` (new; complete CSS design system with custom properties)
+  - `portal/proxy.conf.json` (new; dev proxy for /portal-api)
+  - `src/app.ts` (updated; added express.static serving for portal dist + SPA fallback)
+  - `src/routes/portal.ts` (updated; removed old ~280-line inline HTML handler)
+  - `package.json` (added build:portal and build:all scripts)
+  - `.gitignore` (added portal/dist/, portal/node_modules/, portal/.angular/)
+  - `README.md` (updated portal description, project structure, build commands)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Implemented a full Angular 19 SPA developer portal to satisfy REQ-F-006's "Provide a developer portal front-end" requirement. The portal provides 10 page components covering authentication (login/register/password-reset), credential lifecycle management, customer/account creation and inspection, ACH/wire/card simulation controls, yield configuration, API activity logs, audit trail viewing, and OpenAPI contract visibility. Uses standalone components, lazy-loaded routes, functional interceptors/guards, and a CSS custom properties design system. The built portal is served by Express at `/portal` with SPA fallback routing; the old inline HTML debug tool was removed.
+
 *(Add new entries at the bottom when implementing further requirements.)*
