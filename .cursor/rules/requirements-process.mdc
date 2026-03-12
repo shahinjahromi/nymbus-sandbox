@@ -1,0 +1,26 @@
+---
+description: Requirements-driven development — log requirements, delta-only code, traceability, tests, defect log
+alwaysApply: true
+---
+
+# Requirements & Implementation Process
+
+When working on this repo, follow the process defined in **`requirements/PROCESS.md`**. Summary:
+
+1. **Requirements folder** — Log every new functional requirement under `requirements/functional/` and every non-functional under `requirements/non-functional/`. Use IDs (e.g. REQ-F-001, REQ-NF-001). Note any **changes** to existing requirements in a "Change history" section in that requirement file.
+
+2. **Delta-only code** — Implement only the **change** or **new requirement**. Do not re-generate entire files or the whole codebase from "all requirements." Edit the minimal set of files/lines needed.
+
+3. **Traceability** — After making source code changes for a requirement, update **`requirements/TRACEABILITY.md`** with: date, requirement ID, list of **files changed**, and a brief summary.
+
+4. **Test per requirement** — Every requirement must have at least one test that proves it. Add or update the test when implementing the requirement; reference the test (file + name) in the requirement doc.
+
+5. **Build = run tests** — Every build runs the test suite. Before fixing any failing test: log the defect(s) in **`requirements/DEFECTS.md`** (test name, expected vs actual, requirement ID if known), then optionally attempt a fix. Do not skip logging defects.
+
+6. **Deployment model (REQ-NF-002)** — Design must support two phases: **Phase 1:** backend (DB + APIs) on **Azure**, front-end on **Vercel**; **Phase 2:** backend and front-end both on **Azure**. Keep front-end host-agnostic (config-driven API URL); backend always Azure-deployable. Follow **`requirements/design/DEPLOYMENT.md`** when adding or changing front-end or deployment. Local sandbox should be deployable as Azure backend + Vercel front-end in Phase 1.
+
+7. **SOLID (REQ-NF-003)** — Architecture must conform to SOLID principles ([ref](https://medium.com/@ankurpratik/software-architecture-s-o-l-i-d-principles-967930d2812b)). Follow **`requirements/design/SOLID.md`**: single responsibility, open/closed, Liskov substitution, interface segregation, dependency inversion.
+
+8. **Financial DB practices (REQ-NF-004)** — Database design must follow best practices for financial systems ([ref](https://medium.com/@keemsisi/the-ideal-database-for-financial-transactions-unraveling-the-best-options-d5fef359fe09)). Follow **`requirements/design/DATABASE-FINANCIAL.md`**: ACID for core data, auditability, security, DECIMAL for money, indexing.
+
+Reference: `requirements/README.md`, `requirements/PROCESS.md`, `requirements/TRACEABILITY.md`, `requirements/DEFECTS.md`, `requirements/design/DEPLOYMENT.md`, `requirements/design/SOLID.md`, `requirements/design/DATABASE-FINANCIAL.md`.

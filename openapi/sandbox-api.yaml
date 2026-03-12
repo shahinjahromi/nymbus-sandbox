@@ -1,0 +1,265 @@
+openapi: 3.0.3
+info:
+  title: Nymbus Sandbox API
+  description: |
+    Sandbox environment for Nymbus processor integration. Integrators create developer
+    accounts with OAuth credentials, call all APIs, and receive production-like responses
+    to validate integrations before going live against a Nymbus core processor.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3040
+    description: Sandbox (local)
+  - url: https://sandbox.api.nymbus.example.com
+    description: Sandbox (hosted)
+
+tags:
+  - name: Auth
+    description: OAuth 2.0 token for API access
+  - name: Accounts
+  - name: Transactions
+  - name: Customers
+  - name: Transfers
+
+paths:
+  /oauth/token:
+    post:
+      tags: [Auth]
+      summary: Obtain access token
+      description: Client credentials grant. Use the returned access_token as Bearer token for all API requests.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id, client_secret]
+              properties:
+                client_id: { type: string, description: "Developer client ID" }
+                client_secret: { type: string, description: "Developer client secret" }
+                grant_type: { type: string, enum: [client_credentials], default: client_credentials }
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [client_id, client_secret]
+              properties:
+                client_id: { type: string }
+                client_secret: { type: string }
+                grant_type: { type: string, enum: [client_credentials] }
+      responses:
+        "200":
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token: { type: string }
+                  token_type: { type: string, example: Bearer }
+                  expires_in: { type: integer }
+                  refresh_token: { type: string }
+                  scope: { type: string }
+        "400":
+          description: Invalid request
+        "401":
+          description: Invalid client credentials
+
+  /accounts:
+    get:
+      tags: [Accounts]
+      summary: List accounts
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: customer_id
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: page_size
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Paginated list of accounts
+        "401":
+          description: Unauthorized
+
+  /accounts/{id}:
+    get:
+      tags: [Accounts]
+      summary: Get account by ID
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Account details
+        "404":
+          description: Account not found
+        "401":
+          description: Unauthorized
+
+  /transactions:
+    get:
+      tags: [Transactions]
+      summary: List transactions
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: account_id
+          in: query
+          required: true
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: page_size
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Paginated list of transactions
+        "400":
+          description: account_id required
+        "401":
+          description: Unauthorized
+
+  /transactions/{id}:
+    get:
+      tags: [Transactions]
+      summary: Get transaction by ID
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Transaction details
+        "404":
+          description: Transaction not found
+        "401":
+          description: Unauthorized
+
+  /customers:
+    get:
+      tags: [Customers]
+      summary: List customers
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: page_size
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Paginated list of customers
+        "401":
+          description: Unauthorized
+
+  /customers/{id}:
+    get:
+      tags: [Customers]
+      summary: Get customer by ID
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Customer details
+        "404":
+          description: Customer not found
+        "401":
+          description: Unauthorized
+
+  /transfers:
+    get:
+      tags: [Transfers]
+      summary: List transfers
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: account_id
+          in: query
+          required: true
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: page_size
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Paginated list of transfers
+        "400":
+          description: account_id required
+        "401":
+          description: Unauthorized
+    post:
+      tags: [Transfers]
+      summary: Create transfer
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from_account_id, amount]
+              properties:
+                type: { type: string, enum: [ach, wire, internal, instant], default: ach }
+                amount: { type: number }
+                from_account_id: { type: string }
+                to_account_id: { type: string }
+                to_external:
+                  type: object
+                  properties:
+                    routing_number: { type: string }
+                    account_number: { type: string }
+                    name: { type: string }
+                description: { type: string }
+      responses:
+        "201":
+          description: Transfer created (sandbox returns pending)
+        "400":
+          description: Validation error
+        "404":
+          description: Account not found
+        "401":
+          description: Unauthorized
+
+  /transfers/{id}:
+    get:
+      tags: [Transfers]
+      summary: Get transfer by ID
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Transfer details
+        "404":
+          description: Transfer not found
+        "401":
+          description: Unauthorized
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  security:
+    - bearerAuth: []
