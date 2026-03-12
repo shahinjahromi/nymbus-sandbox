@@ -1,18 +1,21 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../auth/middleware.js";
-import { mockCustomers, getCustomerById } from "../services/mock-data.js";
+import { captureApiActivity } from "../services/api-activity-log.js";
+import { getTenantCustomerById, listTenantCustomers } from "../services/tenant-store.js";
 import type { PaginatedResponse } from "../types/index.js";
 import type { Customer } from "../types/index.js";
 
 export const customersRouter = Router();
 customersRouter.use(requireAuth);
+customersRouter.use(captureApiActivity);
 
 customersRouter.get("/customers", (_req: Request, res: Response) => {
   const page = Math.max(1, parseInt(String(_req.query.page), 10) || 1);
   const pageSize = Math.min(100, Math.max(1, parseInt(String(_req.query.page_size), 10) || 20));
-  const total = mockCustomers.length;
+  const customers = listTenantCustomers(_req.tenantId!);
+  const total = customers.length;
   const start = (page - 1) * pageSize;
-  const data = mockCustomers.slice(start, start + pageSize);
+  const data = customers.slice(start, start + pageSize);
 
   const response: PaginatedResponse<Customer> = {
     data,
@@ -25,7 +28,7 @@ customersRouter.get("/customers", (_req: Request, res: Response) => {
 });
 
 customersRouter.get("/customers/:id", (req: Request, res: Response) => {
-  const customer = getCustomerById(req.params.id);
+  const customer = getTenantCustomerById(req.tenantId!, req.params.id);
   if (!customer) {
     res.status(404).json({
       code: "NOT_FOUND",

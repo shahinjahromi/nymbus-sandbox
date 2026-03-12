@@ -11,7 +11,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     return;
   }
   const token = auth.slice(7);
-  const { valid, clientId } = validateAccessToken(token);
+  const { valid, clientId, tenantId, credentialId } = validateAccessToken(token);
   if (!valid) {
     res.status(401).json({
       code: "INVALID_OR_EXPIRED_TOKEN",
@@ -19,6 +19,21 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     });
     return;
   }
-  (req as Request & { clientId: string }).clientId = clientId!;
+  req.clientId = clientId!;
+  req.tenantId = tenantId!;
+  req.credentialId = credentialId;
+  next();
+}
+
+export function requirePortalAuth(req: Request, res: Response, next: NextFunction): void {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith("Bearer ")) {
+    res.status(401).json({
+      code: "UNAUTHORIZED",
+      message: "Missing or invalid Authorization header. Use Bearer <portal_token>.",
+    });
+    return;
+  }
+
   next();
 }

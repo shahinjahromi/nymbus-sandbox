@@ -1,15 +1,18 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../auth/middleware.js";
 import {
-  mockTransfers,
-  getTransfersByAccountId,
-  createMockTransfer,
-  getAccountById,
-} from "../services/mock-data.js";
+  createTenantTransfer,
+  getTenantAccountById,
+  getTenantTransferById,
+  listTenantTransfersByAccountId,
+} from "../services/tenant-store.js";
 import type { PaginatedResponse, Transfer } from "../types/index.js";
+import { captureApiActivity } from "../services/api-activity-log.js";
+import { getIdempotentReplay, saveIdempotentResult } from "../services/idempotency-store.js";
 
 export const transfersRouter = Router();
 transfersRouter.use(requireAuth);
+transfersRouter.use(captureApiActivity);
 
 transfersRouter.get("/transfers", (req: Request, res: Response) => {
   const accountId = req.query.account_id as string | undefined;
@@ -21,7 +24,7 @@ transfersRouter.get("/transfers", (req: Request, res: Response) => {
     return;
   }
 
-  const data = getTransfersByAccountId(accountId);
+  const data = listTenantTransfersByAccountId(req.tenantId!, accountId);
   const page = Math.max(1, parseInt(String(req.query.page), 10) || 1);
   const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.page_size), 10) || 20));
   const total = data.length;
@@ -39,7 +42,7 @@ transfersRouter.get("/transfers", (req: Request, res: Response) => {
 });
 
 transfersRouter.get("/transfers/:id", (req: Request, res: Response) => {
-  const transfer = mockTransfers.find((t) => t.id === req.params.id);
+  const transfer = getTenantTransferById(req.tenantId!, req.params.id);
   if (!transfer) {
     res.status(404).json({
       code: "NOT_FOUND",
@@ -73,6 +76,32 @@ transfersRouter.post("/transfers", (req: Request, res: Response) => {
       }
     : undefined;
   const description = body?.description;
+  const idempotencyKeyHeader = req.headers["x-idempotency-key"];
+  const idempotencyKey =
+    typeof idempotencyKeyHeader === "string" ? idempotencyKeyHeader.trim() : "";
+
+  if (idempotencyKey.length > 40) {
+    res.status(400).json({
+      code: "BAD_REQUEST",
+      message: "x-idempotency-key must be <= 40 characters",
+    });
+    return;
+  }
+
+  if (idempotencyKey.length > 0) {
+    const replay = getIdempotentReplay<Transfer>({
+      tenantId: req.tenantId!,
+      method: req.method,
+      route: "/transfers",
+      key: idempotencyKey,
+    });
+
+    if (replay) {
+      res.setHeader("x-idempotent-replay", "true");
+      res.status(replay.statusCode).json(replay.payload);
+      return;
+    }
+  }
 
   if (!fromAccountId || !amount || amount <= 0) {
     res.status(400).json({
@@ -90,7 +119,7 @@ transfersRouter.post("/transfers", (req: Request, res: Response) => {
     return;
   }
 
-  const fromAccount = getAccountById(fromAccountId);
+  const fromAccount = getTenantAccountById(req.tenantId!, fromAccountId);
   if (!fromAccount) {
     res.status(404).json({
       code: "NOT_FOUND",
@@ -100,7 +129,8 @@ transfersRouter.post("/transfers", (req: Request, res: Response) => {
     return;
   }
 
-  const transfer = createMockTransfer({
+  const transfer = createTenantTransfer({
+    tenantId: req.tenantId!,
     type,
     amount,
     fromAccountId,
@@ -108,5 +138,17 @@ transfersRouter.post("/transfers", (req: Request, res: Response) => {
     toExternal,
     description,
   });
+
+  if (idempotencyKey.length > 0) {
+    saveIdempotentResult({
+      tenantId: req.tenantId!,
+      method: req.method,
+      route: "/transfers",
+      key: idempotencyKey,
+      statusCode: 201,
+      payload: transfer,
+    });
+  }
+
   res.status(201).json(transfer);
 });

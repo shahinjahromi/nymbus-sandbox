@@ -172,4 +172,54 @@ Format per entry:
 
 ---
 
+### 10. Initial implementation slice for portal + tenant-scoped backend (REQ-F-006, REQ-F-007, REQ-F-009, REQ-F-010, REQ-F-012, REQ-NF-005)
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-006, REQ-F-007, REQ-F-009, REQ-F-010, REQ-F-012, REQ-NF-005
+- **Requirement title:** Portal auth and credential lifecycle, tenant data isolation, idempotency/logging, sandbox audit/security controls
+- **Files changed:**
+  - `src/services/developer-registry.ts` (credential lifecycle with tenant scoping)
+  - `src/auth/oauth.ts` (tenant-aware token issuance/validation)
+  - `src/auth/middleware.ts` (tenant/credential context propagation)
+  - `src/services/tenant-store.ts` (new tenant-scoped data layer)
+  - `src/services/api-activity-log.ts` (new request activity capture and listing)
+  - `src/services/idempotency-store.ts` (new idempotency replay storage)
+  - `src/services/audit-log.ts` (new append-only sandbox audit trail)
+  - `src/services/portal-auth.ts` (new portal user/session/OTP service)
+  - `src/routes/accounts.ts` (tenant-scoped reads)
+  - `src/routes/customers.ts` (tenant-scoped reads)
+  - `src/routes/transactions.ts` (tenant-scoped reads)
+  - `src/routes/transfers.ts` (tenant-scoped writes + idempotency)
+  - `src/routes/portal.ts` (new portal API and minimal portal client UI)
+  - `src/app.ts` (portal route wiring)
+  - `src/types/express.d.ts` (request context typing)
+  - `tests/req-f-006-portal-auth.test.ts` (new runtime flow test)
+  - `tests/req-f-009-portal-credential-lifecycle.test.ts` (new runtime lifecycle test)
+  - `tests/req-f-010-idempotency-and-api-activity.test.ts` (new runtime idempotency/logging test)
+  - `README.md` (portal usage documentation)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Implemented first runnable full-stack slice: portal registration/login/password-reset OTP, tenant-scoped credential creation/list/revoke/rotate, tenant-scoped API data views, transfer idempotency replay with `x-idempotency-key`, API activity logs, and sandbox audit trail endpoints/UI access. Added runtime tests to validate core flows.
+
+---
+
+### 11. REQ-F-008 then REQ-F-007 implementation slice (simulation/yield first, then tenant operations)
+
+- **Date:** 2026-03-12
+- **Requirement ID:** REQ-F-008, REQ-F-007
+- **Requirement title:** Simulation and interest controls implemented ahead of tenant operations visibility and seed/reset lifecycle
+- **Files changed:**
+  - `src/services/tenant-store.ts` (added incoming ACH/wire simulation, card event simulation, yield config persistence, daily accrual engine, account seed/reset operations)
+  - `src/routes/portal.ts` (added portal API endpoints for simulation, yield/accrual, tenant users/accounts/transactions, account seed/reset)
+  - `README.md` (expanded portal API endpoint documentation)
+  - `tests/req-f-008-transfer-card-simulations.test.ts` (new)
+  - `tests/req-f-008-account-yield-config.test.ts` (new)
+  - `tests/req-f-008-daily-interest-accrual.test.ts` (new)
+  - `tests/req-f-007-tenant-data-visibility.test.ts` (new)
+  - `tests/req-f-007-seed-clear-lifecycle.test.ts` (new)
+  - `tests/req-f-007-api-activity-log.test.ts` (new)
+  - `requirements/TRACEABILITY.md` (this file)
+- **Summary:** Implemented REQ-F-008 first as requested (simulation controls plus APY config and daily accrual), then implemented REQ-F-007 operational views and seed/reset lifecycle endpoints. Added runtime tests for both requirement groups and validated full suite pass.
+
+---
+
 *(Add new entries at the bottom when implementing further requirements.)*

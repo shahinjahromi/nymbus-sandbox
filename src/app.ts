@@ -9,6 +9,7 @@ import { accountsRouter } from "./routes/accounts.js";
 import { transactionsRouter } from "./routes/transactions.js";
 import { customersRouter } from "./routes/customers.js";
 import { transfersRouter } from "./routes/transfers.js";
+import { portalRouter } from "./routes/portal.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -48,16 +49,19 @@ app.get("/", (_req, res) => {
       token_url: `${config.sandboxBaseUrl}/oauth/token`,
       grant_type: "client_credentials",
     },
+    portal: `${config.sandboxBaseUrl}/portal`,
     endpoints: {
       accounts: "/accounts",
       transactions: "/transactions",
       customers: "/customers",
       transfers: "/transfers",
+      portalApi: "/portal-api",
     },
   });
 });
 
 app.use(authRouter);
+app.use(portalRouter);
 app.use(accountsRouter);
 app.use(transactionsRouter);
 app.use(customersRouter);

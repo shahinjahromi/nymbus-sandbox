@@ -1,11 +1,16 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../auth/middleware.js";
-import { mockTransactions, getTransactionsByAccountId } from "../services/mock-data.js";
+import { captureApiActivity } from "../services/api-activity-log.js";
+import {
+  getTenantTransactionById,
+  listTenantTransactionsByAccountId,
+} from "../services/tenant-store.js";
 import type { PaginatedResponse } from "../types/index.js";
 import type { Transaction } from "../types/index.js";
 
 export const transactionsRouter = Router();
 transactionsRouter.use(requireAuth);
+transactionsRouter.use(captureApiActivity);
 
 transactionsRouter.get("/transactions", (req: Request, res: Response) => {
   const accountId = req.query.account_id as string | undefined;
@@ -17,7 +22,7 @@ transactionsRouter.get("/transactions", (req: Request, res: Response) => {
     return;
   }
 
-  const data = getTransactionsByAccountId(accountId);
+  const data = listTenantTransactionsByAccountId(req.tenantId!, accountId);
   const page = Math.max(1, parseInt(String(req.query.page), 10) || 1);
   const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.page_size), 10) || 20));
   const total = data.length;
@@ -35,7 +40,7 @@ transactionsRouter.get("/transactions", (req: Request, res: Response) => {
 });
 
 transactionsRouter.get("/transactions/:id", (req: Request, res: Response) => {
-  const txn = mockTransactions.find((t) => t.id === req.params.id);
+  const txn = getTenantTransactionById(req.tenantId!, req.params.id);
   if (!txn) {
     res.status(404).json({
       code: "NOT_FOUND",

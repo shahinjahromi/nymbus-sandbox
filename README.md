@@ -5,6 +5,7 @@ A **sandbox environment** for the Nymbus processor so integrators can create dev
 ## What This Provides
 
 - **Developer accounts & OAuth 2.0** — Integrators get `client_id` and `client_secret`; they use the **client_credentials** grant to obtain an access token for the sandbox API.
+- **Developer portal (MVP)** — Built-in sandbox portal at `/portal` for developer registration/login, OTP password reset, credential lifecycle actions (create/list/rotate/revoke), and sandbox activity/audit visibility.
 - **Full API surface** — Same endpoints and response shapes as production: accounts, transactions, customers, transfers (ACH, wire, internal, instant).
 - **Deterministic mock data** — Realistic but fake data so integrators can assert on balances, statuses, and pagination without touching real cores.
 - **Pre-production validation** — Build and test integrations end-to-end, then switch the base URL and credentials to production when ready.
@@ -82,6 +83,14 @@ curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/jso
 ### 4. API spec
 
 - **OpenAPI (YAML):** `GET /docs` returns the sandbox API spec.
+- **Portal UI:** `GET /portal` serves the sandbox developer portal client.
+- **Portal API:**
+  - Auth/session: `POST /portal-api/register`, `POST /portal-api/login`, `POST /portal-api/password-reset/*`, `GET /portal-api/me`
+  - Credentials: `GET/POST /portal-api/credentials`, `POST /portal-api/credentials/:id/rotate`, `POST /portal-api/credentials/:id/revoke`
+  - Tenant operations: `GET /portal-api/users`, `GET /portal-api/accounts`, `GET /portal-api/accounts/:id`, `GET /portal-api/accounts/:id/transactions`, `POST /portal-api/accounts/:id/seed`, `POST /portal-api/accounts/:id/reset`
+  - Simulations: `POST /portal-api/simulations/ach-incoming`, `POST /portal-api/simulations/wire-incoming`, `POST /portal-api/simulations/card`
+  - Interest/yield: `GET/POST /portal-api/accounts/:id/yield-config`, `POST /portal-api/interest/accrue-daily`
+  - Observability: `GET /portal-api/api-activity`, `GET /portal-api/audit`
 - **Root:** `GET /` returns a short summary with token URL and endpoint list.
 - **Health:** `GET /health` for liveness.
 
