@@ -7,6 +7,16 @@ import {
 } from "./mock-data.js";
 import type { Account, Customer, Transaction, Transfer } from "../types/index.js";
 import { durableStore } from "./durable-store.js";
+import type {
+  CustomerRow,
+  AccountRow,
+  TransactionRow,
+  TransferRow,
+  YieldConfigRow,
+  LoanPaymentRow,
+  UserDefinedFieldRow,
+  DocumentRow,
+} from "./durable-store.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -61,18 +71,7 @@ interface TenantDataset {
   accountDocuments: Map<string, DocumentRecord[]>;
 }
 
-interface PersistedTenantDataset {
-  accounts: Account[];
-  customers: Customer[];
-  transactions: Transaction[];
-  transfers: Transfer[];
-  yieldConfigs: Array<[string, YieldConfig]>;
-  loanPaymentsByAccount: Array<[string, LoanPaymentRecord[]]>;
-  customerUserDefinedFields: Array<[string, UserDefinedFieldRecord[]]>;
-  accountUserDefinedFields: Array<[string, UserDefinedFieldRecord[]]>;
-  customerDocuments: Array<[string, DocumentRecord[]]>;
-  accountDocuments: Array<[string, DocumentRecord[]]>;
-}
+// PersistedTenantDataset interface removed — replaced by relational entity tables
 
 const datasets = new Map<string, TenantDataset>();
 
@@ -319,59 +318,370 @@ function updateDocument(
   return updated;
 }
 
-function serializeTenantDataset(dataset: TenantDataset): string {
-  const persisted: PersistedTenantDataset = {
-    accounts: dataset.accounts,
-    customers: dataset.customers,
-    transactions: dataset.transactions,
-    transfers: dataset.transfers,
-    yieldConfigs: [...dataset.yieldConfigs.entries()],
-    loanPaymentsByAccount: [...dataset.loanPaymentsByAccount.entries()],
-    customerUserDefinedFields: [...dataset.customerUserDefinedFields.entries()],
-    accountUserDefinedFields: [...dataset.accountUserDefinedFields.entries()],
-    customerDocuments: [...dataset.customerDocuments.entries()],
-    accountDocuments: [...dataset.accountDocuments.entries()],
-  };
+/* -------------------------------------------------------------------------- */
+/*  Relational persistence helpers — convert domain ↔ DB rows                */
+/* -------------------------------------------------------------------------- */
 
-  return JSON.stringify(persisted);
+function toCents(value: number): number {
+  return Math.round(value * 100);
 }
 
-function deserializeTenantDataset(payload: string): TenantDataset {
-  const parsed = JSON.parse(payload) as Partial<PersistedTenantDataset>;
+function fromCents(value: number): number {
+  return Number((value / 100).toFixed(2));
+}
 
+function customerToRow(tenantId: string, c: Customer): CustomerRow {
   return {
-    accounts: Array.isArray(parsed.accounts) ? parsed.accounts : [],
-    customers: Array.isArray(parsed.customers) ? parsed.customers : [],
-    transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
-    transfers: Array.isArray(parsed.transfers) ? parsed.transfers : [],
-    yieldConfigs: new Map(parsed.yieldConfigs ?? []),
-    loanPaymentsByAccount: new Map(parsed.loanPaymentsByAccount ?? []),
-    customerUserDefinedFields: new Map(parsed.customerUserDefinedFields ?? []),
-    accountUserDefinedFields: new Map(parsed.accountUserDefinedFields ?? []),
-    customerDocuments: new Map(parsed.customerDocuments ?? []),
-    accountDocuments: new Map(parsed.accountDocuments ?? []),
+    id: c.id,
+    tenant_id: tenantId,
+    external_id: c.externalId ?? null,
+    first_name: c.firstName,
+    last_name: c.lastName,
+    email: c.email,
+    status: c.status,
+    kyc_status: c.kycStatus ?? null,
+    created_at: c.createdAt,
+    metadata: c.metadata ? JSON.stringify(c.metadata) : null,
   };
 }
+
+function rowToCustomer(r: CustomerRow): Customer {
+  return {
+    id: r.id,
+    externalId: r.external_id ?? undefined,
+    firstName: r.first_name,
+    lastName: r.last_name,
+    email: r.email,
+    status: r.status as Customer["status"],
+    createdAt: r.created_at,
+    kycStatus: (r.kyc_status as Customer["kycStatus"]) ?? undefined,
+    metadata: r.metadata ? JSON.parse(r.metadata) : undefined,
+  };
+}
+
+function accountToRow(tenantId: string, a: Account): AccountRow {
+  return {
+    id: a.id,
+    tenant_id: tenantId,
+    customer_id: a.customerId,
+    type: a.type,
+    status: a.status,
+    currency: a.currency,
+    balance_cents: toCents(a.balance),
+    available_balance_cents: toCents(a.availableBalance),
+    last_four: a.lastFour ?? null,
+    opened_at: a.openedAt,
+    metadata: a.metadata ? JSON.stringify(a.metadata) : null,
+  };
+}
+
+function rowToAccount(r: AccountRow): Account {
+  return {
+    id: r.id,
+    customerId: r.customer_id,
+    type: r.type as Account["type"],
+    status: r.status as Account["status"],
+    currency: r.currency,
+    balance: fromCents(r.balance_cents),
+    availableBalance: fromCents(r.available_balance_cents),
+    lastFour: r.last_four ?? "",
+    openedAt: r.opened_at,
+    metadata: r.metadata ? JSON.parse(r.metadata) : undefined,
+  };
+}
+
+function transactionToRow(tenantId: string, t: Transaction): TransactionRow {
+  return {
+    id: t.id,
+    tenant_id: tenantId,
+    account_id: t.accountId,
+    type: t.type,
+    amount_cents: toCents(t.amount),
+    currency: t.currency,
+    status: t.status,
+    description: t.description ?? null,
+    counterparty: t.counterparty ?? null,
+    posted_at: t.postedAt,
+    reference_id: t.referenceId ?? null,
+    metadata: t.metadata ? JSON.stringify(t.metadata) : null,
+  };
+}
+
+function rowToTransaction(r: TransactionRow): Transaction {
+  return {
+    id: r.id,
+    accountId: r.account_id,
+    type: r.type as Transaction["type"],
+    amount: fromCents(r.amount_cents),
+    currency: r.currency,
+    status: r.status as Transaction["status"],
+    description: r.description ?? "",
+    counterparty: r.counterparty ?? undefined,
+    postedAt: r.posted_at,
+    referenceId: r.reference_id ?? undefined,
+    metadata: r.metadata ? JSON.parse(r.metadata) : undefined,
+  };
+}
+
+function transferToRow(tenantId: string, x: Transfer): TransferRow {
+  return {
+    id: x.id,
+    tenant_id: tenantId,
+    type: x.type,
+    status: x.status,
+    amount_cents: toCents(x.amount),
+    currency: x.currency,
+    from_account_id: x.fromAccountId,
+    to_account_id: x.toAccountId ?? null,
+    to_external: x.toExternal ? JSON.stringify(x.toExternal) : null,
+    description: x.description ?? null,
+    created_at: x.createdAt,
+    completed_at: x.completedAt ?? null,
+    reference_id: x.referenceId ?? null,
+  };
+}
+
+function rowToTransfer(r: TransferRow): Transfer {
+  return {
+    id: r.id,
+    type: r.type as Transfer["type"],
+    status: r.status as Transfer["status"],
+    amount: fromCents(r.amount_cents),
+    currency: r.currency,
+    fromAccountId: r.from_account_id,
+    toAccountId: r.to_account_id ?? undefined,
+    toExternal: r.to_external ? JSON.parse(r.to_external) : undefined,
+    description: r.description ?? undefined,
+    createdAt: r.created_at,
+    completedAt: r.completed_at ?? undefined,
+    referenceId: r.reference_id ?? undefined,
+  };
+}
+
+function yieldConfigToRow(tenantId: string, y: YieldConfig): YieldConfigRow {
+  return {
+    account_id: y.accountId,
+    tenant_id: tenantId,
+    apy: y.apy,
+    enabled: y.enabled ? 1 : 0,
+    accrued_interest_total_cents: toCents(y.accruedInterestTotal),
+    last_accrual_date: y.lastAccrualDate ?? null,
+    updated_at: y.updatedAt,
+  };
+}
+
+function rowToYieldConfig(r: YieldConfigRow): YieldConfig {
+  return {
+    accountId: r.account_id,
+    apy: r.apy,
+    enabled: r.enabled === 1,
+    accruedInterestTotal: fromCents(r.accrued_interest_total_cents),
+    lastAccrualDate: r.last_accrual_date ?? undefined,
+    updatedAt: r.updated_at,
+  };
+}
+
+function loanPaymentToRow(tenantId: string, lp: LoanPaymentRecord): LoanPaymentRow {
+  return {
+    id: lp.id,
+    tenant_id: tenantId,
+    account_id: lp.accountId,
+    amount_cents: toCents(lp.amount),
+    frequency: lp.frequency,
+    status: lp.status,
+    next_payment_date: lp.nextPaymentDate ?? null,
+    updated_at: lp.updatedAt,
+  };
+}
+
+function rowToLoanPayment(r: LoanPaymentRow): LoanPaymentRecord {
+  return {
+    id: r.id,
+    accountId: r.account_id,
+    amount: fromCents(r.amount_cents),
+    frequency: r.frequency,
+    status: r.status,
+    nextPaymentDate: r.next_payment_date ?? undefined,
+    updatedAt: r.updated_at,
+  };
+}
+
+function udfToRow(tenantId: string, scopeType: string, scopeKey: string, udf: UserDefinedFieldRecord): UserDefinedFieldRow {
+  return {
+    id: udf.id,
+    tenant_id: tenantId,
+    scope_type: scopeType,
+    scope_key: scopeKey,
+    field_key: udf.key,
+    value: udf.value,
+    category: udf.category ?? null,
+    updated_at: udf.updatedAt,
+    metadata: udf.metadata ? JSON.stringify(udf.metadata) : null,
+  };
+}
+
+function rowToUdf(r: UserDefinedFieldRow): UserDefinedFieldRecord {
+  return {
+    id: r.id,
+    key: r.field_key,
+    value: r.value,
+    category: r.category ?? undefined,
+    updatedAt: r.updated_at,
+    metadata: r.metadata ? JSON.parse(r.metadata) : undefined,
+  };
+}
+
+function documentToRow(tenantId: string, scopeType: string, scopeKey: string, doc: DocumentRecord): DocumentRow {
+  return {
+    id: doc.id,
+    tenant_id: tenantId,
+    scope_type: scopeType,
+    scope_key: scopeKey,
+    title: doc.title,
+    status: doc.status,
+    type: doc.type ?? null,
+    created_at: doc.createdAt,
+    updated_at: doc.updatedAt,
+    payload: JSON.stringify(doc.payload),
+  };
+}
+
+function rowToDocument(r: DocumentRow): DocumentRecord {
+  return {
+    id: r.id,
+    title: r.title,
+    status: r.status,
+    type: r.type ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    payload: r.payload ? JSON.parse(r.payload) : {},
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Flush / load using relational entity tables                               */
+/* -------------------------------------------------------------------------- */
 
 function saveTenantDataset(tenantId: string, dataset: TenantDataset): void {
-  durableStore.saveTenantDatasetPayload(tenantId, serializeTenantDataset(dataset));
+  // Collect all UDF rows
+  const udfRows: UserDefinedFieldRow[] = [];
+  for (const [scopeKey, records] of dataset.customerUserDefinedFields.entries()) {
+    for (const r of records) udfRows.push(udfToRow(tenantId, "customer", scopeKey, r));
+  }
+  for (const [scopeKey, records] of dataset.accountUserDefinedFields.entries()) {
+    for (const r of records) udfRows.push(udfToRow(tenantId, "account", scopeKey, r));
+  }
+
+  // Collect all document rows
+  const docRows: DocumentRow[] = [];
+  for (const [scopeKey, records] of dataset.customerDocuments.entries()) {
+    for (const r of records) docRows.push(documentToRow(tenantId, "customer", scopeKey, r));
+  }
+  for (const [scopeKey, records] of dataset.accountDocuments.entries()) {
+    for (const r of records) docRows.push(documentToRow(tenantId, "account", scopeKey, r));
+  }
+
+  // Collect all loan payment rows
+  const lpRows: LoanPaymentRow[] = [];
+  for (const [, records] of dataset.loanPaymentsByAccount.entries()) {
+    for (const r of records) lpRows.push(loanPaymentToRow(tenantId, r));
+  }
+
+  durableStore.saveTenantEntities(tenantId, {
+    customers: dataset.customers.map((c) => customerToRow(tenantId, c)),
+    accounts: dataset.accounts.map((a) => accountToRow(tenantId, a)),
+    transactions: dataset.transactions.map((t) => transactionToRow(tenantId, t)),
+    transfers: dataset.transfers.map((x) => transferToRow(tenantId, x)),
+    yieldConfigs: [...dataset.yieldConfigs.values()].map((y) => yieldConfigToRow(tenantId, y)),
+    loanPayments: lpRows,
+    userDefinedFields: udfRows,
+    documents: docRows,
+  });
+}
+
+function loadTenantDatasetFromDb(tenantId: string): TenantDataset | null {
+  const loaded = durableStore.loadTenantEntities(tenantId);
+  if (!loaded) return null;
+
+  const yieldConfigs = new Map<string, YieldConfig>();
+  for (const r of loaded.yieldConfigs) {
+    yieldConfigs.set(r.account_id, rowToYieldConfig(r));
+  }
+
+  const loanPaymentsByAccount = new Map<string, LoanPaymentRecord[]>();
+  for (const r of loaded.loanPayments) {
+    const list = loanPaymentsByAccount.get(r.account_id) ?? [];
+    list.push(rowToLoanPayment(r));
+    loanPaymentsByAccount.set(r.account_id, list);
+  }
+
+  const customerUserDefinedFields = new Map<string, UserDefinedFieldRecord[]>();
+  const accountUserDefinedFields = new Map<string, UserDefinedFieldRecord[]>();
+  for (const r of loaded.userDefinedFields) {
+    const map = r.scope_type === "customer" ? customerUserDefinedFields : accountUserDefinedFields;
+    const list = map.get(r.scope_key) ?? [];
+    list.push(rowToUdf(r));
+    map.set(r.scope_key, list);
+  }
+
+  const customerDocuments = new Map<string, DocumentRecord[]>();
+  const accountDocuments = new Map<string, DocumentRecord[]>();
+  for (const r of loaded.documents) {
+    const map = r.scope_type === "customer" ? customerDocuments : accountDocuments;
+    const list = map.get(r.scope_key) ?? [];
+    list.push(rowToDocument(r));
+    map.set(r.scope_key, list);
+  }
+
+  return {
+    accounts: loaded.accounts.map(rowToAccount),
+    customers: loaded.customers.map(rowToCustomer),
+    transactions: loaded.transactions.map(rowToTransaction),
+    transfers: loaded.transfers.map(rowToTransfer),
+    yieldConfigs,
+    loanPaymentsByAccount,
+    customerUserDefinedFields,
+    accountUserDefinedFields,
+    customerDocuments,
+    accountDocuments,
+  };
 }
 
 function ensureTenantDataset(tenantId: string): TenantDataset {
   let dataset = datasets.get(tenantId);
   if (!dataset) {
-    const persisted = durableStore.getTenantDatasetPayload(tenantId);
-
-    if (persisted) {
-      try {
-        dataset = deserializeTenantDataset(persisted);
-      } catch {
+    // Try loading from relational entity tables
+    const fromDb = loadTenantDatasetFromDb(tenantId);
+    if (fromDb) {
+      dataset = fromDb;
+    } else {
+      // Fall back to legacy blob (migration path), then to baseline clone
+      const persisted = durableStore.getTenantDatasetPayload(tenantId);
+      if (persisted) {
+        try {
+          const parsed = JSON.parse(persisted) as Record<string, unknown>;
+          dataset = {
+            accounts: Array.isArray(parsed.accounts) ? (parsed.accounts as Account[]) : [],
+            customers: Array.isArray(parsed.customers) ? (parsed.customers as Customer[]) : [],
+            transactions: Array.isArray(parsed.transactions) ? (parsed.transactions as Transaction[]) : [],
+            transfers: Array.isArray(parsed.transfers) ? (parsed.transfers as Transfer[]) : [],
+            yieldConfigs: new Map(Array.isArray(parsed.yieldConfigs) ? (parsed.yieldConfigs as Array<[string, YieldConfig]>) : []),
+            loanPaymentsByAccount: new Map(Array.isArray(parsed.loanPaymentsByAccount) ? (parsed.loanPaymentsByAccount as Array<[string, LoanPaymentRecord[]]>) : []),
+            customerUserDefinedFields: new Map(Array.isArray(parsed.customerUserDefinedFields) ? (parsed.customerUserDefinedFields as Array<[string, UserDefinedFieldRecord[]]>) : []),
+            accountUserDefinedFields: new Map(Array.isArray(parsed.accountUserDefinedFields) ? (parsed.accountUserDefinedFields as Array<[string, UserDefinedFieldRecord[]]>) : []),
+            customerDocuments: new Map(Array.isArray(parsed.customerDocuments) ? (parsed.customerDocuments as Array<[string, DocumentRecord[]]>) : []),
+            accountDocuments: new Map(Array.isArray(parsed.accountDocuments) ? (parsed.accountDocuments as Array<[string, DocumentRecord[]]>) : []),
+          };
+          // Migrate: save to entity tables
+          saveTenantDataset(tenantId, dataset);
+        } catch {
+          dataset = cloneDataset();
+          saveTenantDataset(tenantId, dataset);
+        }
+      } else {
         dataset = cloneDataset();
         saveTenantDataset(tenantId, dataset);
       }
-    } else {
-      dataset = cloneDataset();
-      saveTenantDataset(tenantId, dataset);
     }
 
     datasets.set(tenantId, dataset);

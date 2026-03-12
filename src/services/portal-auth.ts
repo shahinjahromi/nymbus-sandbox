@@ -1,4 +1,5 @@
 import { randomBytes, createHash } from "crypto";
+import { durableStore } from "./durable-store.js";
 
 interface PortalUser {
   email: string;
@@ -24,9 +25,11 @@ interface OtpRecord {
   attempts: number;
 }
 
+// In-memory caches (loaded from DB on first access)
 const usersByEmail = new Map<string, PortalUser>();
 const sessionsByToken = new Map<string, PortalSession>();
-const resetOtpByEmail = new Map<string, OtpRecord>();
+const resetOtpByEmail = new Map<string, OtpRecord>(); // OTPs are ephemeral — no DB persistence needed
+let cacheLoaded = false;
 
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -55,11 +58,55 @@ function tenantIdFromEmail(email: string): string {
   return `tenant_${sanitized}`;
 }
 
+/** Load users and sessions from DB into in-memory cache (once) */
+function ensureCache(): void {
+  if (cacheLoaded) return;
+  cacheLoaded = true;
+
+  for (const row of durableStore.getAllPortalUsers()) {
+    usersByEmail.set(row.email, {
+      email: row.email,
+      passwordHash: row.password_hash,
+      name: row.name ?? undefined,
+      tenantId: row.tenant_id,
+      createdAt: row.created_at,
+      failedLoginAttempts: row.failed_login_attempts,
+      blockedUntil: row.blocked_until ?? undefined,
+    });
+  }
+
+  // Sessions are short-lived; we don't reload stale ones
+  durableStore.deleteExpiredSessions();
+}
+
+function persistUser(user: PortalUser): void {
+  durableStore.upsertPortalUser({
+    email: user.email,
+    password_hash: user.passwordHash,
+    name: user.name ?? null,
+    tenant_id: user.tenantId,
+    created_at: user.createdAt,
+    failed_login_attempts: user.failedLoginAttempts,
+    blocked_until: user.blockedUntil ?? null,
+  });
+}
+
+function persistSession(session: PortalSession): void {
+  durableStore.upsertPortalSession({
+    token: session.token,
+    email: session.email,
+    tenant_id: session.tenantId,
+    created_at: session.createdAt,
+    expires_at: session.expiresAt,
+  });
+}
+
 export function registerPortalUser(params: {
   email: string;
   password: string;
   name?: string;
 }): { email: string; tenantId: string; name?: string } {
+  ensureCache();
   const email = normalizeEmail(params.email);
   if (usersByEmail.has(email)) {
     throw new Error("EMAIL_ALREADY_EXISTS");
@@ -75,6 +122,7 @@ export function registerPortalUser(params: {
   };
 
   usersByEmail.set(email, user);
+  persistUser(user);
   return { email: user.email, tenantId: user.tenantId, name: user.name };
 }
 
@@ -82,6 +130,7 @@ export function authenticatePortalUser(params: {
   email: string;
   password: string;
 }): { portalToken: string; tenantId: string; email: string; name?: string } {
+  ensureCache();
   const email = normalizeEmail(params.email);
   const user = usersByEmail.get(email);
   if (!user) {
@@ -99,21 +148,25 @@ export function authenticatePortalUser(params: {
       user.blockedUntil = Date.now() + BLOCK_WINDOW_MS;
       user.failedLoginAttempts = 0;
     }
+    persistUser(user);
     throw new Error("INVALID_CREDENTIALS");
   }
 
   user.failedLoginAttempts = 0;
   user.blockedUntil = undefined;
+  persistUser(user);
 
   const token = generateToken();
   const now = Date.now();
-  sessionsByToken.set(token, {
+  const session: PortalSession = {
     token,
     email: user.email,
     tenantId: user.tenantId,
     createdAt: now,
     expiresAt: now + SESSION_TTL_MS,
-  });
+  };
+  sessionsByToken.set(token, session);
+  persistSession(session);
 
   return {
     portalToken: token,
@@ -128,7 +181,25 @@ export function validatePortalSession(token: string): {
   email?: string;
   tenantId?: string;
 } {
-  const session = sessionsByToken.get(token);
+  ensureCache();
+
+  // Check in-memory first
+  let session = sessionsByToken.get(token);
+  if (!session) {
+    // Try DB (session might have been created in a previous process)
+    const row = durableStore.getPortalSession(token);
+    if (row && Date.now() <= row.expires_at) {
+      session = {
+        token: row.token,
+        email: row.email,
+        tenantId: row.tenant_id,
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+      };
+      sessionsByToken.set(token, session);
+    }
+  }
+
   if (!session || Date.now() > session.expiresAt) {
     return { valid: false };
   }
@@ -136,6 +207,7 @@ export function validatePortalSession(token: string): {
 }
 
 export function issueResetOtp(email: string): { sent: boolean; otpPreview: string } {
+  ensureCache();
   const normalizedEmail = normalizeEmail(email);
   const user = usersByEmail.get(normalizedEmail);
   if (!user) {
@@ -157,6 +229,7 @@ export function confirmResetOtp(params: {
   otp: string;
   newPassword: string;
 }): { ok: true } {
+  ensureCache();
   const email = normalizeEmail(params.email);
   const user = usersByEmail.get(email);
   const otpRecord = resetOtpByEmail.get(email);
@@ -180,6 +253,7 @@ export function confirmResetOtp(params: {
   }
 
   user.passwordHash = hashPassword(params.newPassword);
+  persistUser(user);
   resetOtpByEmail.delete(email);
   return { ok: true };
 }
@@ -189,6 +263,7 @@ export function getPortalUserProfile(email: string): {
   tenantId: string;
   name?: string;
 } | null {
+  ensureCache();
   const user = usersByEmail.get(normalizeEmail(email));
   if (!user) {
     return null;

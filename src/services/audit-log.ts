@@ -1,3 +1,5 @@
+import { durableStore } from "./durable-store.js";
+
 export interface AuditEntry {
   id: string;
   tenantId: string;
@@ -9,17 +11,6 @@ export interface AuditEntry {
   details?: Record<string, unknown>;
 }
 
-const auditEntriesByTenant = new Map<string, AuditEntry[]>();
-
-function addEntry(tenantId: string, entry: AuditEntry): void {
-  const current = auditEntriesByTenant.get(tenantId) ?? [];
-  current.push(entry);
-  if (current.length > 1000) {
-    current.splice(0, current.length - 1000);
-  }
-  auditEntriesByTenant.set(tenantId, current);
-}
-
 export function writeAuditEntry(params: {
   tenantId: string;
   actor: string;
@@ -29,19 +20,33 @@ export function writeAuditEntry(params: {
   details?: Record<string, unknown>;
 }): void {
   const id = `aud_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-  addEntry(params.tenantId, {
+
+  durableStore.insertAuditEntry({
     id,
-    tenantId: params.tenantId,
+    tenant_id: params.tenantId,
     actor: params.actor,
     action: params.action,
     outcome: params.outcome,
     timestamp: new Date().toISOString(),
-    requestId: params.requestId,
-    details: params.details,
+    request_id: params.requestId ?? null,
+    details: params.details ? JSON.stringify(params.details) : null,
   });
+
+  // Keep at most 1000 entries per tenant
+  durableStore.pruneAuditLog(params.tenantId, 1000);
 }
 
 export function listTenantAuditEntries(tenantId: string, limit = 100): AuditEntry[] {
-  const all = auditEntriesByTenant.get(tenantId) ?? [];
-  return all.slice().reverse().slice(0, Math.max(1, Math.min(limit, 500)));
+  const rows = durableStore.listAuditEntries(tenantId, limit);
+
+  return rows.map((r) => ({
+    id: r.id,
+    tenantId: r.tenant_id,
+    actor: r.actor,
+    action: r.action,
+    outcome: r.outcome as "success" | "failure",
+    timestamp: r.timestamp,
+    requestId: r.request_id ?? undefined,
+    details: r.details ? JSON.parse(r.details) : undefined,
+  }));
 }

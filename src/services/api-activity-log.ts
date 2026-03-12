@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import { durableStore } from "./durable-store.js";
 
 export interface ApiActivityEntry {
   id: string;
@@ -13,21 +14,31 @@ export interface ApiActivityEntry {
   idempotencyReplay?: boolean;
   timestamp: string;
   environment: "sandbox";
+  durationMs?: number;
 }
-
-const apiActivityByTenant = new Map<string, ApiActivityEntry[]>();
 
 function generateRequestId(): string {
   return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function pushActivity(tenantId: string, entry: ApiActivityEntry): void {
-  const current = apiActivityByTenant.get(tenantId) ?? [];
-  current.push(entry);
-  if (current.length > 1000) {
-    current.splice(0, current.length - 1000);
-  }
-  apiActivityByTenant.set(tenantId, current);
+function persistActivity(entry: ApiActivityEntry): void {
+  durableStore.insertApiActivity({
+    id: entry.id,
+    tenant_id: entry.tenantId,
+    client_id: entry.clientId,
+    credential_id: entry.credentialId ?? null,
+    method: entry.method,
+    path: entry.path,
+    status_code: entry.statusCode,
+    request_id: entry.requestId,
+    idempotency_key: entry.idempotencyKey ?? null,
+    idempotency_replay: entry.idempotencyReplay ? 1 : 0,
+    environment: entry.environment,
+    timestamp: entry.timestamp,
+    duration_ms: entry.durationMs ?? null,
+  });
+  // Keep at most 1000 entries per tenant
+  durableStore.pruneApiActivity(entry.tenantId, 1000);
 }
 
 export function listApiActivityForTenant(params: {
@@ -38,27 +49,30 @@ export function listApiActivityForTenant(params: {
   statusCode?: number;
   limit?: number;
 }): ApiActivityEntry[] {
-  const all = apiActivityByTenant.get(params.tenantId) ?? [];
+  const rows = durableStore.listApiActivity({
+    tenantId: params.tenantId,
+    environment: params.environment,
+    method: params.method,
+    pathContains: params.pathContains,
+    statusCode: params.statusCode,
+    limit: params.limit,
+  });
 
-  return all
-    .filter((entry) => {
-      if (params.environment && entry.environment !== params.environment) {
-        return false;
-      }
-      if (params.method && entry.method !== params.method.toUpperCase()) {
-        return false;
-      }
-      if (params.pathContains && !entry.path.includes(params.pathContains)) {
-        return false;
-      }
-      if (typeof params.statusCode === "number" && entry.statusCode !== params.statusCode) {
-        return false;
-      }
-      return true;
-    })
-    .slice()
-    .reverse()
-    .slice(0, Math.max(1, Math.min(params.limit ?? 100, 500)));
+  return rows.map((r) => ({
+    id: r.id,
+    tenantId: r.tenant_id,
+    clientId: r.client_id,
+    credentialId: r.credential_id ?? undefined,
+    method: r.method,
+    path: r.path,
+    statusCode: r.status_code,
+    requestId: r.request_id,
+    idempotencyKey: r.idempotency_key ?? undefined,
+    idempotencyReplay: r.idempotency_replay === 1,
+    timestamp: r.timestamp,
+    environment: r.environment as "sandbox",
+    durationMs: r.duration_ms ?? undefined,
+  }));
 }
 
 export function captureApiActivity(req: Request, res: Response, next: NextFunction): void {
@@ -71,6 +85,7 @@ export function captureApiActivity(req: Request, res: Response, next: NextFuncti
   res.setHeader("x-request-id", requestId);
 
   const startedAt = new Date().toISOString();
+  const startMs = Date.now();
   const idempotencyKeyHeader = req.headers["x-idempotency-key"];
   const idempotencyKey =
     typeof idempotencyKeyHeader === "string" && idempotencyKeyHeader.trim().length > 0
@@ -82,7 +97,7 @@ export function captureApiActivity(req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    pushActivity(req.tenantId, {
+    const entry: ApiActivityEntry = {
       id: `${requestId}:${res.statusCode}`,
       tenantId: req.tenantId,
       clientId: req.clientId,
@@ -95,7 +110,10 @@ export function captureApiActivity(req: Request, res: Response, next: NextFuncti
       idempotencyReplay: res.getHeader("x-idempotent-replay") === "true",
       timestamp: startedAt,
       environment: "sandbox",
-    });
+      durationMs: Date.now() - startMs,
+    };
+
+    persistActivity(entry);
   });
 
   next();

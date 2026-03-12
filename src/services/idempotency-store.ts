@@ -1,14 +1,5 @@
-interface IdempotencyRecord<T> {
-  tenantId: string;
-  method: string;
-  route: string;
-  key: string;
-  createdAt: number;
-  statusCode: number;
-  payload: T;
-}
+import { durableStore } from "./durable-store.js";
 
-const records = new Map<string, IdempotencyRecord<unknown>>();
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 function makeCompositeKey(params: {
@@ -27,19 +18,20 @@ export function getIdempotentReplay<T>(params: {
   key: string;
 }): { statusCode: number; payload: T } | null {
   const compositeKey = makeCompositeKey(params);
-  const existing = records.get(compositeKey) as IdempotencyRecord<T> | undefined;
-  if (!existing) {
+  const row = durableStore.getIdempotencyRecord(compositeKey);
+  if (!row) {
     return null;
   }
 
-  if (Date.now() - existing.createdAt > TWENTY_FOUR_HOURS_MS) {
-    records.delete(compositeKey);
+  if (Date.now() - row.created_at > TWENTY_FOUR_HOURS_MS) {
+    // Expired — clean up
+    durableStore.deleteExpiredIdempotencyRecords(TWENTY_FOUR_HOURS_MS);
     return null;
   }
 
   return {
-    statusCode: existing.statusCode,
-    payload: existing.payload,
+    statusCode: row.status_code,
+    payload: JSON.parse(row.payload) as T,
   };
 }
 
@@ -52,13 +44,14 @@ export function saveIdempotentResult<T>(params: {
   payload: T;
 }): void {
   const compositeKey = makeCompositeKey(params);
-  records.set(compositeKey, {
-    tenantId: params.tenantId,
+  durableStore.upsertIdempotencyRecord({
+    composite_key: compositeKey,
+    tenant_id: params.tenantId,
     method: params.method.toUpperCase(),
     route: params.route,
-    key: params.key,
-    createdAt: Date.now(),
-    statusCode: params.statusCode,
-    payload: params.payload,
+    idem_key: params.key,
+    created_at: Date.now(),
+    status_code: params.statusCode,
+    payload: JSON.stringify(params.payload),
   });
 }
