@@ -216,11 +216,11 @@ export function issueResetOtp(email: string): { sent: boolean; otpPreview: strin
   ensureCache();
   const normalizedEmail = normalizeEmail(email);
   const user = usersByEmail.get(normalizedEmail);
-  if (!user) {
-    return { sent: true, otpPreview: "000000" };
-  }
 
-  const otp = generateOtp();
+  // Generate a real OTP regardless of whether the user exists.
+  // This avoids leaking user-existence info and ensures the sandbox
+  // OTP preview always matches a stored code.
+  const otp = user ? generateOtp() : generateOtp();
   resetOtpByEmail.set(normalizedEmail, {
     code: otp,
     expiresAt: Date.now() + OTP_TTL_MS,
