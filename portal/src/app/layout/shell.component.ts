@@ -10,55 +10,59 @@ import { ApiService } from '../services/api.service';
   imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive],
   template: `
     <div class="shell">
+      <!-- Mobile backdrop -->
+      <div class="sidebar-backdrop" [class.visible]="sidebarOpen" (click)="closeSidebar()"></div>
+
       <!-- Sidebar -->
-      <aside class="sidebar">
+      <aside class="sidebar" [class.open]="sidebarOpen">
         <div class="sidebar-brand">
           <div class="brand-icon">N</div>
           <div>
             <div class="brand-title">Nymbus Sandbox</div>
             <div class="brand-env"><span class="badge badge-sandbox">sandbox</span></div>
           </div>
+          <button class="sidebar-close" (click)="closeSidebar()" aria-label="Close menu">&times;</button>
         </div>
 
         <nav class="sidebar-nav">
           <div class="nav-section">Overview</div>
-          <a routerLink="/dashboard" routerLinkActive="active" class="nav-item">
+          <a routerLink="/dashboard" routerLinkActive="active" class="nav-item" (click)="closeSidebar()">
             <span class="nav-icon">&#9632;</span> Dashboard
           </a>
 
           <div class="nav-section">Integration</div>
-          <a routerLink="/credentials" routerLinkActive="active" class="nav-item">
+          <a routerLink="/credentials" routerLinkActive="active" class="nav-item" (click)="closeSidebar()">
             <span class="nav-icon">&#128273;</span> Credentials
           </a>
-          <a routerLink="/contract" routerLinkActive="active" class="nav-item">
+          <a routerLink="/contract" routerLinkActive="active" class="nav-item" (click)="closeSidebar()">
             <span class="nav-icon">&#128196;</span> API Contract
           </a>
 
           <div class="nav-section">Data</div>
-          <a routerLink="/customers" routerLinkActive="active" class="nav-item">
+          <a routerLink="/customers" routerLinkActive="active" class="nav-item" (click)="closeSidebar()">
             <span class="nav-icon">&#128101;</span> Customers
           </a>
-          <a routerLink="/accounts" routerLinkActive="active" class="nav-item">
+          <a routerLink="/accounts" routerLinkActive="active" class="nav-item" (click)="closeSidebar()">
             <span class="nav-icon">&#128179;</span> Accounts
           </a>
 
           <div class="nav-section">Simulation</div>
-          <a routerLink="/simulations" routerLinkActive="active" class="nav-item">
+          <a routerLink="/simulations" routerLinkActive="active" class="nav-item" (click)="closeSidebar()">
             <span class="nav-icon">&#9889;</span> Simulations
           </a>
 
           <div class="nav-section">Observability</div>
-          <a routerLink="/activity" routerLinkActive="active" class="nav-item">
+          <a routerLink="/activity" routerLinkActive="active" class="nav-item" (click)="closeSidebar()">
             <span class="nav-icon">&#128200;</span> API Activity
           </a>
-          <a routerLink="/audit" routerLinkActive="active" class="nav-item">
+          <a routerLink="/audit" routerLinkActive="active" class="nav-item" (click)="closeSidebar()">
             <span class="nav-icon">&#128220;</span> Audit Trail
           </a>
         </nav>
 
         <div class="sidebar-footer">
           <div class="nav-section">Tenant</div>
-          <button class="nav-item tenant-btn" (click)="seedTenant()">
+          <button class="nav-item tenant-btn" (click)="seedTenant(); closeSidebar()">
             <span class="nav-icon">&#127793;</span> Seed Data
           </button>
           <button class="nav-item tenant-btn danger" (click)="resetTenant()">
@@ -70,7 +74,12 @@ import { ApiService } from '../services/api.service';
       <!-- Main area -->
       <div class="main">
         <header class="topbar">
-          <div class="topbar-title">Developer Portal</div>
+          <div class="topbar-left">
+            <button class="hamburger" (click)="toggleSidebar()" aria-label="Open menu">
+              <span></span><span></span><span></span>
+            </button>
+            <div class="topbar-title">Developer Portal</div>
+          </div>
           <div class="topbar-right">
             <span class="user-email" *ngIf="user$ | async as user">{{ user.email }}</span>
             <button class="btn-sm" (click)="logout()">Logout</button>
@@ -187,8 +196,54 @@ import { ApiService } from '../services/api.service';
       border-bottom: 1px solid var(--color-border);
     }
     .topbar-title { font-weight: 600; font-size: 15px; }
+    .topbar-left { display: flex; align-items: center; gap: 12px; }
     .topbar-right { display: flex; align-items: center; gap: 12px; }
     .user-email { font-size: 13px; color: var(--color-text-muted); }
+
+    /* ── Hamburger button (hidden on desktop) ── */
+    .hamburger {
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+      width: 32px;
+      height: 32px;
+      padding: 4px;
+      border: none;
+      background: none;
+      cursor: pointer;
+    }
+    .hamburger span {
+      display: block;
+      height: 2px;
+      width: 100%;
+      background: var(--color-text);
+      border-radius: 1px;
+      transition: transform 0.2s;
+    }
+
+    /* ── Sidebar close button (mobile only) ── */
+    .sidebar-close {
+      display: none;
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: #c9d1d9;
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+    }
+    .sidebar-close:hover { color: #fff; }
+
+    /* ── Mobile backdrop ── */
+    .sidebar-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 99;
+    }
 
     .content {
       flex: 1;
@@ -211,12 +266,38 @@ import { ApiService } from '../services/api.service';
     .toast-success { background: #d1e7dd; color: #0a3622; border: 1px solid #a3cfbb; }
     .toast-danger { background: #f8d7da; color: #58151c; border: 1px solid #f1aeb5; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+    /* ── Mobile responsive ── */
+    @media (max-width: 768px) {
+      .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 100;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+      }
+      .sidebar.open {
+        transform: translateX(0);
+      }
+      .sidebar-close { display: block; }
+      .sidebar-backdrop.visible {
+        display: block;
+      }
+      .hamburger { display: flex; }
+      .topbar { padding: 0 12px; }
+      .content { padding: 16px; }
+      .user-email { display: none; }
+      .toast { right: 12px; left: 12px; }
+    }
   `],
 })
 export class ShellComponent {
   user$;
   toastMsg = '';
   toastType: 'success' | 'danger' = 'success';
+  sidebarOpen = false;
 
   constructor(
     private auth: AuthService,
@@ -224,6 +305,14 @@ export class ShellComponent {
     private router: Router,
   ) {
     this.user$ = this.auth.user$;
+  }
+
+  toggleSidebar(): void {
+    this.sidebarOpen = !this.sidebarOpen;
+  }
+
+  closeSidebar(): void {
+    this.sidebarOpen = false;
   }
 
   logout(): void {

@@ -327,6 +327,22 @@ import { ApiService } from '../../services/api.service';
     .method-badge[data-method="PUT"] { background: #fef3c7; color: #92400e; }
     .method-badge[data-method="PATCH"] { background: #e0e7ff; color: #3730a3; }
     .method-badge[data-method="DELETE"] { background: #fee2e2; color: #991b1b; }
+
+    @media (max-width: 768px) {
+      .endpoint-header { flex-wrap: wrap; gap: 4px; padding: 8px; }
+      .endpoint-path { 
+        width: 100%; 
+        overflow: hidden; 
+        text-overflow: ellipsis; 
+        white-space: nowrap; 
+        font-size: 12px; 
+      }
+      .endpoint-controls { flex-direction: column; }
+      .search-input { min-width: 0; width: 100%; }
+      .schema-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .endpoint-detail { padding: 0 8px 8px 8px; }
+      .ep-meta { flex-wrap: wrap; }
+    }
   `],
 })
 export class ContractComponent implements OnInit {

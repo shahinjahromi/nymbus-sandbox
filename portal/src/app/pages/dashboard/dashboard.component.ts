@@ -108,6 +108,15 @@ import { AuthService, PortalUser } from '../../services/auth.service';
       user-select: all;
       color: var(--color-primary);
     }
+
+    @media (max-width: 768px) {
+      .stats-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+      .stat-value { font-size: 22px; }
+      .stat-card { padding: 12px; }
+      .detail-table { font-size: 12px; }
+      .detail-table td { padding: 4px 8px 4px 0; }
+      .endpoint-url { word-break: break-all; font-size: 12px; }
+    }
   `],
 })
 export class DashboardComponent implements OnInit {

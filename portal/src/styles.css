@@ -232,3 +232,33 @@ tbody tr:hover {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ── Mobile responsive global overrides ── */
+@media (max-width: 768px) {
+  .page-title { font-size: 1.25rem; }
+
+  .card { padding: 14px; }
+
+  .form-row {
+    flex-direction: column !important;
+  }
+  .form-row > * { width: 100% !important; }
+
+  .action-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .json-output {
+    font-size: 11px;
+    max-height: 260px;
+  }
+
+  .badge { font-size: 10px; padding: 2px 6px; }
+}
