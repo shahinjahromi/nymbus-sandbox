@@ -33,6 +33,15 @@ import { AuthService, PortalUser } from '../../services/auth.service';
       </div>
     </div>
 
+    <div class="card" *ngIf="serverInfo">
+      <h2>Sandbox API Endpoint</h2>
+      <table class="detail-table">
+        <tr><td class="label-col">Base URL</td><td class="mono endpoint-url">{{ serverInfo.baseUrl }}</td></tr>
+        <tr><td class="label-col">OAuth Token</td><td class="mono endpoint-url">{{ serverInfo.oauthEndpoint }}</td></tr>
+        <tr><td class="label-col">Health Check</td><td class="mono endpoint-url">{{ serverInfo.healthEndpoint }}</td></tr>
+      </table>
+    </div>
+
     <div class="card" *ngIf="user">
       <h2>Your Profile</h2>
       <table class="detail-table">
@@ -95,6 +104,10 @@ import { AuthService, PortalUser } from '../../services/auth.service';
       border-radius: 3px;
       background: #e9ecef;
     }
+    .endpoint-url {
+      user-select: all;
+      color: var(--color-primary);
+    }
   `],
 })
 export class DashboardComponent implements OnInit {
@@ -103,6 +116,7 @@ export class DashboardComponent implements OnInit {
   accountCount = 0;
   credentialCount = 0;
   recentActivity: any[] = [];
+  serverInfo: any = null;
   loaded = false;
 
   constructor(private api: ApiService, private auth: AuthService) {}
@@ -110,6 +124,7 @@ export class DashboardComponent implements OnInit {
   ngOnInit(): void {
     this.user = this.auth.currentUser;
     this.loadStats();
+    this.api.getServerInfo().subscribe({ next: (res: any) => { this.serverInfo = res; } });
   }
 
   private loadStats(): void {

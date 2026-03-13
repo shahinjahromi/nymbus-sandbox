@@ -1,4 +1,5 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
+import { config } from "../config.js";
 import { enforceEnvironmentScope } from "../auth/middleware.js";
 import {
   authenticatePortalUser,
@@ -20,6 +21,7 @@ import {
   getActiveContractMetadata,
   getContractChangeLog,
   getContractDeprecations,
+  getEndpointCatalog,
 } from "../services/openapi-contract.js";
 import {
   accrueDailyInterest,
@@ -830,6 +832,19 @@ portalRouter.get(
     res.json(getContractDeprecations());
   }
 );
+
+portalRouter.get("/portal-api/contract/endpoints", requirePortalSession, (_req: Request, res: Response) => {
+  res.json(getEndpointCatalog());
+});
+
+portalRouter.get("/portal-api/server-info", requirePortalSession, (_req: Request, res: Response) => {
+  res.json({
+    baseUrl: config.sandboxBaseUrl,
+    oauthEndpoint: `${config.sandboxBaseUrl}/oauth/token`,
+    healthEndpoint: `${config.sandboxBaseUrl}/health`,
+    environment: "sandbox",
+  });
+});
 
 portalRouter.get("/portal-api/audit", requirePortalSession, async (req: Request, res: Response) => {
   const limit =

@@ -155,4 +155,13 @@ export class ApiService {
   getContractDeprecations(): Observable<any> {
     return this.http.get(`${this.base}/contract/deprecations`);
   }
+
+  getContractEndpoints(): Observable<any> {
+    return this.http.get(`${this.base}/contract/endpoints`);
+  }
+
+  /* ── Server Info ── */
+  getServerInfo(): Observable<any> {
+    return this.http.get(`${this.base}/server-info`);
+  }
 }

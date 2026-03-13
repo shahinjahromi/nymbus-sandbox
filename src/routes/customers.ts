@@ -1560,3 +1560,22 @@ customersRouter.patch("/debitCards/updatePinOffset", (_req: Request, res: Respon
 customersRouter.patch("/debitCards/updatePinOffsetByCardNumber", (_req: Request, res: Response) => {
   res.json({ success: true, environment: "sandbox" });
 });
+
+/* ── Account Instructions ── */
+customersRouter.get(
+  "/customers/:customerId/accounts/:accountId/accountInstructions",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const instructions = getAccountMetadataCollection(account, "accountInstructions");
+    res.json({
+      responseStatus: { success: true, errors: [], recordCount: instructions.length },
+      accountInstructions: instructions,
+      environment: "sandbox",
+    });
+  }
+);

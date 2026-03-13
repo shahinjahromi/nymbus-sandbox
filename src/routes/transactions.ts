@@ -501,3 +501,86 @@ transactionsRouter.post("/onboarding/loanOnboardingFunding", (req: Request, res:
 
   res.status(201).json({ transfer, environment: "sandbox" });
 });
+
+/* ── Official Check Transactions ── */
+
+// In-memory store for official check transactions (per-tenant)
+const officialCheckTxnMap = new Map<string, any[]>();
+
+function getTenantOfficialChecks(tenantId: string): any[] {
+  if (!officialCheckTxnMap.has(tenantId)) {
+    officialCheckTxnMap.set(tenantId, []);
+  }
+  return officialCheckTxnMap.get(tenantId)!;
+}
+
+transactionsRouter.post(
+  "/transactions/officialCheckTransactions",
+  (req: Request, res: Response) => {
+    const body = req.body ?? {};
+    const checks = getTenantOfficialChecks(req.tenantId!);
+
+    const txn = {
+      id: `oct_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      status: "pending",
+      transactionType: body.transactionType ?? "officialCheck",
+      accountId: body.accountId ?? body.account_id ?? null,
+      payee: body.payee ?? null,
+      amount: body.amount ?? 0,
+      memo: body.memo ?? null,
+      checkNumber: body.checkNumber ?? `CHK${Math.floor(100000 + Math.random() * 900000)}`,
+      remitter: body.remitter ?? null,
+      purchaseDate: body.purchaseDate ?? new Date().toISOString().slice(0, 10),
+      fee: body.fee ?? 0,
+      createdAt: new Date().toISOString(),
+    };
+
+    checks.push(txn);
+
+    res.status(201).json({
+      responseStatus: { success: true, errors: [] },
+      officialCheck: txn,
+      environment: "sandbox",
+    });
+  }
+);
+
+transactionsRouter.post(
+  "/transactions/officialCheckTransactions/confirm",
+  (req: Request, res: Response) => {
+    const body = req.body ?? {};
+    const checks = getTenantOfficialChecks(req.tenantId!);
+    const txnId = body.id ?? body.transactionId;
+
+    if (txnId) {
+      const found = checks.find((c: any) => c.id === txnId);
+      if (found) {
+        found.status = "confirmed";
+        found.confirmedAt = new Date().toISOString();
+        res.json({
+          responseStatus: { success: true, errors: [] },
+          officialCheck: found,
+          environment: "sandbox",
+        });
+        return;
+      }
+      res.status(404).json({
+        responseStatus: { success: false, errors: [{ message: "Transaction not found" }] },
+      });
+      return;
+    }
+
+    // If no ID provided, confirm all pending
+    const pending = checks.filter((c: any) => c.status === "pending");
+    pending.forEach((c: any) => {
+      c.status = "confirmed";
+      c.confirmedAt = new Date().toISOString();
+    });
+
+    res.json({
+      responseStatus: { success: true, errors: [] },
+      confirmedCount: pending.length,
+      environment: "sandbox",
+    });
+  }
+);

@@ -716,3 +716,124 @@ accountsRouter.post(
     res.status(201).json({ stopCheckPayment: record, environment: "sandbox" });
   }
 );
+
+/* ── Reserve Account Number ── */
+accountsRouter.post("/accounts/reserveAccountNumber", (req: Request, res: Response) => {
+  const reservedNumber = `acct_rsv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  res.json({
+    responseStatus: { success: true, errors: [] },
+    accountNumber: reservedNumber,
+    environment: "sandbox",
+  });
+});
+
+/* ── Account Lockouts ── */
+accountsRouter.get(
+  "/accounts/:accountId(acct_[A-Za-z0-9_]+)/lockouts",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const lockouts = getAccountMetadataCollection(account, "lockouts");
+    res.json({
+      responseStatus: { success: true, errors: [], recordCount: lockouts.length },
+      lockouts,
+      environment: "sandbox",
+    });
+  }
+);
+
+/* ── Future Rate / Payment Changes ── */
+accountsRouter.post(
+  "/accounts/:accountId(acct_[A-Za-z0-9_]+)/futureRatePaymentChanges",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const payload = asObject(req.body) ?? {};
+    const data = getAccountMetadataCollection(account, "futureRatePaymentChanges");
+    const record = {
+      id: `frpc_${Date.now()}`,
+      amortizationMaturity: payload.amortizationMaturity ?? null,
+      rateIndex: payload.rateIndex ?? null,
+      maxRate: payload.maxRate ?? null,
+      changePaymentWithRateChange: payload.changePaymentWithRateChange ?? false,
+      nextPaymentChangeDate: payload.nextPaymentChangeDate ?? null,
+      nextRateChangeDate: payload.nextRateChangeDate ?? null,
+      dayBaseYearBase: payload.dayBaseYearBase ?? null,
+      effectiveDate: payload.effectiveDate ?? new Date().toISOString().slice(0, 10),
+      minRate: payload.minRate ?? null,
+      rateMargin: payload.rateMargin ?? null,
+      interestMethod: payload.interestMethod ?? null,
+      paymentChangeFrequency: payload.paymentChangeFrequency ?? null,
+      paymentChangeLeadDays: payload.paymentChangeLeadDays ?? 0,
+      maxRateChangeUpDown: payload.maxRateChangeUpDown ?? null,
+      rateChangeFrequency: payload.rateChangeFrequency ?? null,
+      rateChangeLeadDays: payload.rateChangeLeadDays ?? 0,
+      rateRoundingFactor: payload.rateRoundingFactor ?? null,
+      rateRoundingMethod: payload.rateRoundingMethod ?? null,
+      rateChangeDay: payload.rateChangeDay ?? null,
+      paymentChangeDay: payload.paymentChangeDay ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    data.push(record);
+
+    saveAccountMetadataCollection({
+      tenantId: req.tenantId!,
+      account,
+      key: "futureRatePaymentChanges",
+      collection: data,
+    });
+
+    res.status(201).json({
+      responseStatus: { success: true, errors: [] },
+      futurePaymentRateChange: record,
+      environment: "sandbox",
+    });
+  }
+);
+
+/* ── Account Notes ── */
+accountsRouter.post(
+  "/accounts/:accountId(acct_[A-Za-z0-9_]+)/accountNotes",
+  (req: Request, res: Response) => {
+    const account = getTenantAccountById(req.tenantId!, req.params.accountId);
+    if (!account) {
+      res.status(404).json({ code: "NOT_FOUND", message: "Account not found" });
+      return;
+    }
+
+    const payload = asObject(req.body) ?? {};
+    const data = getAccountMetadataCollection(account, "accountNotes");
+    const record = {
+      id: `note_${Date.now()}`,
+      responsibleOfficer: payload.responsibleOfficer ?? null,
+      notes: payload.notes ?? "",
+      severity: payload.severity ?? "low",
+      dueDate: payload.dueDate ?? null,
+      expirationDate: payload.expirationDate ?? null,
+      definedNoteTemplate: payload.definedNoteTemplate ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    data.push(record);
+
+    saveAccountMetadataCollection({
+      tenantId: req.tenantId!,
+      account,
+      key: "accountNotes",
+      collection: data,
+    });
+
+    res.status(201).json({
+      responseStatus: { success: true, message: "Note created", errors: [] },
+      notes: record,
+      environment: "sandbox",
+    });
+  }
+);

@@ -10,6 +10,7 @@ import { transactionsRouter } from "./routes/transactions.js";
 import { customersRouter } from "./routes/customers.js";
 import { transfersRouter } from "./routes/transfers.js";
 import { portalRouter } from "./routes/portal.js";
+import { resourcesRouter } from "./routes/resources.js";
 import { openApiFallbackRouter } from "./routes/openapi-fallback.js";
 import { flushTenantStore } from "./services/tenant-store.js";
 import { flushFallbackRuntimeStore } from "./routes/openapi-fallback.js";
@@ -92,10 +93,12 @@ for (const versionPrefix of coreApiVersions) {
   app.use(versionPrefix, transactionsRouter);
   app.use(versionPrefix, customersRouter);
   app.use(versionPrefix, transfersRouter);
+  app.use(versionPrefix, resourcesRouter);
 }
 
 app.use(accountsRouter);
 app.use(transactionsRouter);
 app.use(customersRouter);
 app.use(transfersRouter);
+app.use(resourcesRouter);
 app.use(openApiFallbackRouter);
