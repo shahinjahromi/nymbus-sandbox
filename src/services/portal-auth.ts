@@ -53,9 +53,9 @@ function generateOtp(): string {
 }
 
 function tenantIdFromEmail(email: string): string {
-  const localPart = normalizeEmail(email).split("@")[0] ?? "tenant";
-  const sanitized = localPart.replace(/[^a-z0-9]/gi, "").slice(0, 14) || "tenant";
-  return `tenant_${sanitized}`;
+  const normalized = normalizeEmail(email);
+  const hash = createHash("sha256").update(normalized).digest("hex").slice(0, 16);
+  return `tenant_${hash}`;
 }
 
 /** Load users and sessions from DB into in-memory cache (once) */
